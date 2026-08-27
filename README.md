@@ -38,37 +38,31 @@ exportable as a log, and the full comparison as a branded QA/QC report. Repeat c
 
 ## Prerequisites
 
-1. **Node.js 20+** and npm.
-2. An **APS (Autodesk Platform Services) app** — reuse the **same APS app as the
-   `tidp_midp_ACCDocumentSubmittal` project** (the credentials in that project's `server/.env`):
-   same Client ID/Secret, and the same `http://localhost:3001/api/auth/callback` callback URL
-   works here too since this app also runs its server on port 3001. If you'd rather register a
-   fresh one, it needs to be a **Traditional Web App** (3-legged Authorization Code + PKCE) with
-   the Data Management API product enabled.
+1. An **Azure subscription** — the app runs as a single Linux App Service (Node 20). See
+   [`deploy/azure-provision.sh`](deploy/azure-provision.sh) for the resources it needs (App Service
+   Plan, Web App, Key Vault, Application Insights).
+2. An **APS (Autodesk Platform Services) app** at [aps.autodesk.com](https://aps.autodesk.com) — a
+   **Traditional Web App** (3-legged Authorization Code + PKCE) with the Data Management API
+   product enabled, and a callback URL matching `https://<your-app-name>.azurewebsites.net/api/auth/callback`.
+   Required scopes: `data:read data:write data:create data:search account:read`.
 3. Your Autodesk account needs access to the ACC hub/project(s) you want to check - the app only
    shows hubs/projects/folders your signed-in account can already see. (Sign-in is still required
    even if you plan to use upload-only for both sides - the app is ACC-integrated throughout, e.g.
    for saved setups and "save report to ACC folder".)
 
-## Setup
+## Deploy
 
 ```bash
-npm install                     # installs root, server, and client workspaces
-cp server/.env.example server/.env
+APS_CLIENT_ID=... APS_CLIENT_SECRET=... SESSION_SECRET=... bash deploy/azure-provision.sh
 ```
 
-Edit `server/.env` and fill in the APS Client ID/Secret from Prerequisites above and a random
-`SESSION_SECRET`.
+Provisions the Azure resources and wires up App Settings (see the script for what it creates).
+Then add the printed Web App's publish profile as the `AZURE_WEBAPP_PUBLISH_PROFILE` secret in this
+repo's GitHub Actions settings - every push to `main` ([`.github/workflows/azure-deploy.yml`](.github/workflows/azure-deploy.yml))
+builds and deploys automatically from there. Client and API are served from the same Azure Web App
+origin; there's no separate frontend host or dev server in the deployed app.
 
-## Run
-
-```bash
-npm run dev
-```
-
-This starts the API on `http://localhost:3001` and the frontend on `http://localhost:5173` (the
-frontend dev server proxies `/api/*` to the backend, so just open `http://localhost:5173`). Sign in
-with Autodesk, then:
+Once deployed, sign in with Autodesk at the app's Azure URL, then:
 
 1. Pick the hub and project.
 2. Provide the TIDP/MIDP workbook - **Pick from ACC** (browse and select the live `.xlsx`) or

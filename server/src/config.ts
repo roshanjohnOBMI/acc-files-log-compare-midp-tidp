@@ -9,10 +9,14 @@ function required(name: string): string {
 }
 
 export const config = {
-  port: Number(process.env.PORT ?? 3001),
+  port: Number(process.env.PORT ?? 8080),
   isProduction: process.env.NODE_ENV === "production",
-  clientUrl: process.env.CLIENT_URL ?? "http://localhost:5173",
-  sessionSecret: process.env.SESSION_SECRET ?? "dev-secret-change-me",
+  get clientUrl() {
+    return required("CLIENT_URL");
+  },
+  get sessionSecret() {
+    return required("SESSION_SECRET");
+  },
   aps: {
     get clientId() {
       return required("APS_CLIENT_ID");
