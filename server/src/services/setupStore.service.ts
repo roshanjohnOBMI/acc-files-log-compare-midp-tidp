@@ -1,0 +1,64 @@
+import { JSONFilePreset } from "lowdb/node";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+import { v4 as uuidv4 } from "uuid";
+import type { Setup } from "../types/domain.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const dbPath = path.join(__dirname, "..", "..", "data", "setups.json");
+
+interface DbShape {
+  setups: Setup[];
+}
+
+const dbPromise = JSONFilePreset<DbShape>(dbPath, { setups: [] });
+
+export async function listSetups(): Promise<Setup[]> {
+  const db = await dbPromise;
+  await db.read();
+  return db.data.setups;
+}
+
+export async function getSetup(id: string): Promise<Setup | undefined> {
+  const db = await dbPromise;
+  await db.read();
+  return db.data.setups.find((s) => s.id === id);
+}
+
+export async function createSetup(input: Omit<Setup, "id" | "createdAt" | "updatedAt">): Promise<Setup> {
+  const db = await dbPromise;
+  await db.read();
+  const now = new Date().toISOString();
+  const setup: Setup = { ...input, id: uuidv4(), createdAt: now, updatedAt: now };
+  db.data.setups.push(setup);
+  await db.write();
+  return setup;
+}
+
+export async function updateSetup(
+  id: string,
+  input: Omit<Setup, "id" | "createdAt" | "updatedAt">
+): Promise<Setup | undefined> {
+  const db = await dbPromise;
+  await db.read();
+  const index = db.data.setups.findIndex((s) => s.id === id);
+  if (index === -1) return undefined;
+  const updated: Setup = {
+    ...input,
+    id,
+    createdAt: db.data.setups[index].createdAt,
+    updatedAt: new Date().toISOString(),
+  };
+  db.data.setups[index] = updated;
+  await db.write();
+  return updated;
+}
+
+export async function deleteSetup(id: string): Promise<boolean> {
+  const db = await dbPromise;
+  await db.read();
+  const before = db.data.setups.length;
+  db.data.setups = db.data.setups.filter((s) => s.id !== id);
+  await db.write();
+  return db.data.setups.length < before;
+}
