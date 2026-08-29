@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  AZURE_WEBAPP_NAME: acc-filelog-compare # must match the Web App name from az-provision.sh
+  AZURE_WEBAPP_NAME: apsFilesComparison # the actual deployed Web App (resource group apsOBMIDev)
 
 jobs:
   build-and-deploy:
