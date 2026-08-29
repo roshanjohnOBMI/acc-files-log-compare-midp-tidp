@@ -36,6 +36,10 @@ exportable as a log, and the full comparison as a branded QA/QC report. Repeat c
   ready-to-render JSON from the server - and drives the folder browsing, file uploads, row
   filtering, Files Log source picking, and results UI.
 
+See [`docs/REFERENCE.md`](docs/REFERENCE.md) for the full technical reference - API surface, data
+model, matching engine internals, QA/QC report structure, and the deployment record below in more
+depth.
+
 ## Prerequisites
 
 1. An **Azure subscription** — the app runs as a single Linux App Service (Node 20). See
@@ -44,7 +48,11 @@ exportable as a log, and the full comparison as a branded QA/QC report. Repeat c
 2. An **APS (Autodesk Platform Services) app** at [aps.autodesk.com](https://aps.autodesk.com) — a
    **Traditional Web App** (3-legged Authorization Code + PKCE) with the Data Management API
    product enabled, and a callback URL matching `https://<your-app-name>.azurewebsites.net/api/auth/callback`.
-   Required scopes: `data:read data:write data:create data:search account:read`.
+   Required scopes: `data:read data:write data:create data:search account:read`. Give this tool its
+   **own** APS app rather than sharing a Client ID with another tool - Autodesk enforces API rate
+   limits per Client ID across *all* of that app's traffic, so sharing one means both tools compete
+   for the same budget (this was the actual cause of "slow ACC scans" the first time this app was
+   deployed - see [`docs/REFERENCE.md`](docs/REFERENCE.md#deployment)).
 3. Your Autodesk account needs access to the ACC hub/project(s) you want to check - the app only
    shows hubs/projects/folders your signed-in account can already see. (Sign-in is still required
    even if you plan to use upload-only for both sides - the app is ACC-integrated throughout, e.g.
@@ -52,15 +60,44 @@ exportable as a log, and the full comparison as a branded QA/QC report. Repeat c
 
 ## Deploy
 
+The app runs as a single Linux App Service; client and API are served from the same Azure Web App
+origin, so there's no separate frontend host or dev server in the deployed app.
+
+### Provisioning new infrastructure
+
 ```bash
 APS_CLIENT_ID=... APS_CLIENT_SECRET=... SESSION_SECRET=... bash deploy/azure-provision.sh
 ```
 
-Provisions the Azure resources and wires up App Settings (see the script for what it creates).
-Then add the printed Web App's publish profile as the `AZURE_WEBAPP_PUBLISH_PROFILE` secret in this
-repo's GitHub Actions settings - every push to `main` ([`.github/workflows/azure-deploy.yml`](.github/workflows/azure-deploy.yml))
-builds and deploys automatically from there. Client and API are served from the same Azure Web App
-origin; there's no separate frontend host or dev server in the deployed app.
+Provisions the Azure resources and wires up App Settings (see the script for what it creates) - App
+Service Plan, Web App, Key Vault, Application Insights. Edit the variables at the top of the script
+first (names/region/SKU are placeholders).
+
+### Continuous deployment
+
+Every push to `main` builds and deploys automatically via
+[`.github/workflows/azure-deploy.yml`](.github/workflows/azure-deploy.yml). It authenticates to
+Azure with **Azure AD OIDC** (a federated Azure AD app registration scoped to just this one Web
+App) rather than a stored publish profile - if the target Web App has basic publishing credentials
+(SCM/FTP) disabled at the policy level, as this one does, a publish-profile-based deploy fails
+outright with "Publish profile is invalid". Required repo secrets: `AZURE_CLIENT_ID`,
+`AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` - no passwords. Setting this up for a new Web App means
+creating an app registration, adding a federated credential trusting
+`repo:<owner>/<repo>:ref:refs/heads/main` as the OIDC subject (GitHub may present this with
+immutable IDs appended, e.g. `repo:owner@id/repo@id:ref:...` - check the failed run's logs for the
+exact subject it presented if the federated credential doesn't match), and granting it the
+`Website Contributor` role scoped to the Web App.
+
+### Two settings that matter and aren't obvious
+
+- **`NODE_ENV=production` must be set on the Web App's Startup Command, not as an App Setting** -
+  App Settings are visible to the Oryx build step too (`SCM_DO_BUILD_DURING_DEPLOYMENT=true`), and
+  with `NODE_ENV=production` present there, `npm install` silently skips `devDependencies` -
+  breaking the TypeScript build (`tsc: not found`) since `typescript` lives in `devDependencies`.
+  Startup Command: `NODE_ENV=production node server/dist/index.js`.
+- **Always On** should be enabled (Basic tier and above support it, at no extra cost) - without it,
+  the app fully idles out after ~20 minutes of no traffic, and the next request pays for a cold
+  start (container pull + Node boot, observed to take anywhere from 30s to several minutes).
 
 Once deployed, sign in with Autodesk at the app's Azure URL, then:
 
@@ -111,3 +148,9 @@ npm run build      # typechecks + builds both server (dist/) and client (dist/)
 - Deep search never blends candidates from more than one strategy together - it stops at the first
   strategy (exact, then starts-with, then contains) that finds anything, including a duplicate, so
   a clean exact match is never diluted by broader results.
+- Live folder scans walk the ACC tree only 2 folders at a time, with exponential backoff on
+  429s, specifically to avoid the Autodesk SDK's shared circuit breaker (opens after 5 consecutive
+  failures and blocks *all* ACC calls for 60s). If a scan is slow, check the Activity Log panel for
+  retry/rate-limit warnings before assuming it's an infrastructure problem - it's almost always
+  Autodesk-side throttling, not this app. Scoping a scan to fewer, more specific folders (rather
+  than a broad top-level folder with subfolders included) is the most effective fix.
