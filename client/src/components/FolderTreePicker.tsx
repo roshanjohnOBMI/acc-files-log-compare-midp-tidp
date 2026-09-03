@@ -87,23 +87,62 @@ export function FolderTreePicker({
 
     setRoots((prev) => updateNode(prev, node.id, (n) => ({ ...n, loading: true })));
     try {
-      const children = await listFolderChildren(projectId, node.id);
+      const children = await fetchAndWrapChildren(node.id);
       setRoots((prev) =>
-        updateNode(prev, node.id, (n) => ({
-          ...n,
-          expanded: true,
-          loading: false,
-          children: children.map((c) => ({
-            ...c,
-            expanded: false,
-            loading: false,
-            children: undefined,
-          })),
-        }))
+        updateNode(prev, node.id, (n) => ({ ...n, expanded: true, loading: false, children }))
       );
     } catch (err) {
       setRoots((prev) => updateNode(prev, node.id, (n) => ({ ...n, loading: false })));
       setError(err instanceof Error ? err.message : "Failed to load folder contents");
+    }
+  }
+
+  async function fetchAndWrapChildren(folderId: string): Promise<TreeNodeState[]> {
+    const children = await listFolderChildren(projectId!, folderId);
+    return children.map((c) => ({ ...c, expanded: false, loading: false, children: undefined }));
+  }
+
+  /**
+   * Checking a folder in "multiFolder" mode also checks its immediate children, expanding it first
+   * (one extra API call) if they aren't loaded yet - so ticking a project-root-ish folder visibly
+   * picks up everything one level down instead of leaving the user to expand and check each
+   * subfolder by hand. Unchecking it undoes exactly that (itself + that same one level), leaving
+   * any subfolder checked independently, deeper down, alone.
+   *
+   * Deliberately shallow (one level, not the whole subtree): the actual scan already walks
+   * arbitrarily deep server-side when "Include subfolders" is on (see filesLogScan.service.ts),
+   * with retry/backoff around ACC's rate limits - recursively auto-expanding every descendant
+   * here, client-side, would just be racing that same API with none of those protections.
+   */
+  async function handleCheckToggle(node: TreeNodeState, path: string) {
+    if (node.type !== "folder") return;
+    const alreadyChecked = Boolean(selectedFolderIds?.has(node.id));
+
+    let children = node.children;
+    if (!alreadyChecked && !children) {
+      setRoots((prev) => updateNode(prev, node.id, (n) => ({ ...n, loading: true })));
+      try {
+        children = await fetchAndWrapChildren(node.id);
+        setRoots((prev) =>
+          updateNode(prev, node.id, (n) => ({ ...n, expanded: true, loading: false, children }))
+        );
+      } catch (err) {
+        setRoots((prev) => updateNode(prev, node.id, (n) => ({ ...n, loading: false })));
+        setError(err instanceof Error ? err.message : "Failed to load folder contents");
+        children = [];
+      }
+    }
+
+    onToggleFolder?.(node.id, path);
+    for (const child of children ?? []) {
+      if (child.type !== "folder") continue;
+      const childChecked = Boolean(selectedFolderIds?.has(child.id));
+      // Only flip children whose state actually needs to change to match the parent's new
+      // state - onToggleFolder is a plain toggle, so calling it on a child already in the target
+      // state would flip it the wrong way.
+      if (childChecked === alreadyChecked) {
+        onToggleFolder?.(child.id, `${path}/${child.name}`);
+      }
     }
   }
 
@@ -134,7 +173,7 @@ export function FolderTreePicker({
             onToggle={toggleExpand}
             onSelect={onSelect}
             selectedFolderIds={selectedFolderIds}
-            onToggleFolder={onToggleFolder}
+            onCheckToggle={handleCheckToggle}
           />
         ))}
       </ul>
@@ -153,7 +192,10 @@ interface TreeNodeProps {
   onToggle: (node: TreeNodeState) => void;
   onSelect?: (id: string, path: string, parentId?: string) => void;
   selectedFolderIds?: Set<string>;
-  onToggleFolder?: (id: string, path: string) => void;
+  /** "multiFolder" mode only: checking a folder also checks its immediate children (see
+   * handleCheckToggle above) - takes the node (not just its id) since it needs to know whether
+   * children are already loaded. */
+  onCheckToggle?: (node: TreeNodeState, path: string) => void;
 }
 
 function TreeNode({
@@ -167,7 +209,7 @@ function TreeNode({
   onToggle,
   onSelect,
   selectedFolderIds,
-  onToggleFolder,
+  onCheckToggle,
 }: TreeNodeProps) {
   const isFolder = node.type === "folder";
   const isSelected = node.id === selectedFolderId;
@@ -200,7 +242,7 @@ function TreeNode({
             type="checkbox"
             className="folder-tree-checkbox"
             checked={isChecked}
-            onChange={() => onToggleFolder?.(node.id, path)}
+            onChange={() => onCheckToggle?.(node, path)}
           />
         )}
         <span className="folder-tree-icon">{isFolder ? "📁" : "📄"}</span>
@@ -252,7 +294,7 @@ function TreeNode({
               onToggle={onToggle}
               onSelect={onSelect}
               selectedFolderIds={selectedFolderIds}
-              onToggleFolder={onToggleFolder}
+              onCheckToggle={onCheckToggle}
             />
           ))}
         </ul>

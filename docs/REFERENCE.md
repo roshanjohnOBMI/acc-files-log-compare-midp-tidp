@@ -45,11 +45,14 @@ tool, or ACC's own log exports.
  Browser              Express API                Autodesk APS
  (React 19 SPA)  ───►  server/dist/index.js  ───►  Data Management API
                        HTTPS + session cookie      3-legged OAuth + REST
-
-                       ├─ exceljs        (workbook parsing)
-                       ├─ lowdb          (server/data/setups.json)
-                       ├─ express-session (in-memory store)
-                       └─ multer         (in-memory uploads, 50MB cap)
+                            │
+                            ├─ worker_threads pool (server/src/workers/)
+                            │    parseTidpWorkbook · parseFilesLogWorkbook
+                            │    matchRows · buildQaQcWorkbook
+                            ├─ exceljs         (workbook parsing, inside workers)
+                            ├─ lowdb           (server/data/setups.json)
+                            ├─ express-session (in-memory store)
+                            └─ multer          (in-memory uploads, 50MB cap)
 ```
 
 A single Node.js process serves both the API and the built React SPA from one Azure Web App
@@ -57,11 +60,23 @@ origin - there's no separate frontend host, so the session cookie never has to c
 
 **Server — `server/`.** Express + TypeScript. Owns APS 3-legged OAuth (PKCE), all Data Management
 API calls, TIDP/MIDP and Files Log workbook parsing, the matching engine, QA/QC report generation,
-saved setups, and the in-memory activity/error log.
+saved setups, and the in-memory activity/error log. The four CPU-heavy jobs - parsing a TIDP/MIDP
+or Files Log workbook, matching rows, and building the QA/QC export - run on a small pool of
+`worker_threads` (`server/src/workers/workerPool.ts`, sized to `min(4, cpuCount - 1)`, at least 1)
+instead of the main thread, so processing a large workbook doesn't stall other requests or the
+Activity Log panel's own polling. `logEntry()` calls made inside a worker are forwarded to the main
+thread over the worker's message port and re-run there, since each thread would otherwise have its
+own private, never-read copy of the in-memory log.
 
 **Client — `client/`.** React 19 + TypeScript + Vite. Has no Excel-parsing dependency of its own -
-the server hands back ready-to-render JSON. Drives folder browsing, uploads, row filtering, Files
-Log source selection, and the results UI.
+the server hands back ready-to-render JSON. All workspace state (hub/project, the loaded workbook,
+column mapping, Files Log, results) lives in one React Context (`client/src/context/WorkspaceContext.tsx`),
+shared by three pages under a persistent top bar: **Workspace** (pick source files, run the
+comparison, see results), **Setup & mapping** (tabs/header rows, column mapping, row filters, Files
+Log folder-path filter, and a preview - everything that configures a comparison, in one place), and
+**Saved setups**. Supports light/dark/system theme (`client/src/hooks/useTheme.ts`, persisted to
+`localStorage`, applied before first paint via an inline script in `index.html` so there's no
+flash of the wrong theme).
 
 | Layer  | Package                | Version              | Role                              |
 | ------ | ----------------------- | --------------------- | ---------------------------------- |
@@ -77,23 +92,39 @@ Log source selection, and the results UI.
 
 ## Core workflow
 
-The workspace UI walks a reviewer through seven steps:
+A persistent top bar (hub/project pickers, theme toggle, sign-out, and a pinned **Compare**
+button) sits above three pages, all reading and acting on the same `WorkspaceContext` state:
 
-1. **Hub & project** - pick the ACC hub and project; every subsequent picker is scoped to it.
-2. **Select the TIDP/MIDP file** - `acc` (browse and pick the live workbook) or `upload`. Header
-   row auto-detected from the sheet's frozen pane, or the row with the most filled cells as a
-   fallback; overridable per tab.
-3. **Filter rows & map columns** - Excel-AutoFilter-style per-column filters. Identifier, formats,
-   planned-date, and revision columns are pre-selected by header-name heuristics.
-4. **Preview the comparison set** - row-by-row preview of identifier, discipline, and format list
-   before any ACC calls are made.
-5. **ACC Files Log** - `scan` (walk folder(s) live), `file` (pick an exported log workbook from
-   ACC), or `upload`. Optional "only Shared" keyword filter on folder path (default `Shared`).
-6. **Run the comparison** - matches every filtered row against the Files Log server-side. The
-   configuration can be saved as a named, reloadable **setup** here.
-7. **Results & export** - per-row, per-format results with match strategy shown under Deep search.
-   Export the QA/QC report as `.xlsx` - download, or save into an ACC folder (versioning a
-   previous report of the same name).
+**Workspace** - the day-to-day page:
+
+1. **TIDP/MIDP file** - `acc` (browse and pick the live workbook) or `upload`. Header row
+   auto-detected from the sheet's frozen pane, or the row with the most filled cells as a
+   fallback. A compact summary pill (tab, header row, filled-row count, column mapping, match
+   mode) links out to Setup & mapping to change any of it.
+2. **ACC Files Log** - `scan` (walk folder(s) live - checking a folder also checks its immediate
+   subfolders), `file` (pick an exported log workbook from ACC), or `upload`. A summary pill shows
+   the current folder-path filter and how many files it leaves in, linking to Setup & mapping.
+3. **Results** - run the comparison, export the QA/QC report (download or save to an ACC folder),
+   and switch between the results table and the activity/error log.
+
+**Setup & mapping** - everything that configures a comparison, in one tabbed page reached from
+either "Edit / Setup" pill above:
+
+- **Tabs & header row** - which tabs are included and each one's header row (apply one row to
+  every tab at once, or set them individually).
+- **Column mapping** - identifier, formats, planned-date, and revision columns (pre-selected by
+  header-name heuristics) and match mode, including **Deep search**.
+- **Filter rows** - Excel-AutoFilter-style per-column filters, plus the planned-date filter.
+- **ACC Files Log filter** - the "only count files whose folder path contains…" keyword filter
+  (default `Shared`), with a live count of how many files it leaves in.
+- **Preview** - row-by-row preview of identifier, discipline, and format list before running
+  anything against ACC.
+
+**Saved setups** - reusable configurations, listed as cards with Load/Rename/Delete (plus a
+collapsible full table). Loading one restores the hub/project, Files Log source settings, column
+mapping, and match mode into Workspace; the source file and Files Log itself still need to be
+reselected/rerun, since both are either live ACC data or a local file not persisted between
+sessions.
 
 ## Data sources
 
@@ -354,6 +385,8 @@ see [Deployment](#deployment).
 | Revision lookup       | Live-scan files only (need a real version id); capped at 300 matched files per search. |
 | ACC rate limiting     | The Data Management SDK's shared circuit breaker opens after 5 consecutive failures and blocks all calls for 60s - folder scans use low concurrency (2) with exponential backoff for exactly this reason. |
 | Cold starts           | Prevented by Always On (enabled) - without it, the app idles out after ~20 minutes and the next request pays for a full container restart. |
+| CPU-heavy work        | Runs on the worker-thread pool, not the request thread - see [Architecture](#architecture). Sized to the host's CPU count, so a bigger App Service plan also means more parallel worker capacity. |
+| Multi-folder check    | Checking a folder in the Files Log scan picker also checks its immediate (one level) subfolders - deliberately shallow, since the scan itself already walks deeper server-side with rate-limit protection. |
 
 ## Troubleshooting
 

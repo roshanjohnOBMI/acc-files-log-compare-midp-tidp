@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { fetchRevisions } from "../services/apsDataManagement.service.js";
-import { matchRows, type MatchInputRow } from "../services/matchService.js";
+import type { MatchInputRow } from "../services/matchService.js";
 import type { IndexedFile, MatchMode } from "../types/domain.js";
 import { logEntry } from "../services/errorLog.service.js";
+import { runTask } from "../workers/workerPool.js";
 
 export const searchRouter = Router();
 
@@ -27,7 +28,11 @@ searchRouter.post("/search/run", async (req, res, next) => {
 
     logEntry("search", "info", `Comparing ${rows.length} row(s) against ${fileIndex.length} Files Log entr${fileIndex.length === 1 ? "y" : "ies"}`);
 
-    const { results, summary, extraFiles } = matchRows(rows, matchMode ?? "exact", fileIndex);
+    const { results, summary, extraFiles } = await runTask("matchRows", {
+      rows,
+      matchMode: matchMode ?? "exact",
+      fileIndex,
+    });
 
     // Best-effort ACC "Revision" custom-attribute lookup for every unambiguously matched file
     // (clean matches + extras) - duplicates/not-found rows have no single file to look up, and

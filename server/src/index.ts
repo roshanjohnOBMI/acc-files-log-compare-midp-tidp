@@ -14,6 +14,7 @@ import { logRouter } from "./routes/log.routes.js";
 import { exportRouter } from "./routes/export.routes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { requireAuth } from "./middleware/requireAuth.js";
+import { shutdownWorkerPool } from "./workers/workerPool.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const clientDistPath = path.join(__dirname, "..", "..", "client", "dist");
@@ -72,6 +73,15 @@ if (config.isProduction) {
 
 app.use(errorHandler);
 
-app.listen(config.port, () => {
+const server = app.listen(config.port, () => {
   console.log(`Server listening on http://localhost:${config.port}`);
 });
+
+// Lets the worker-thread pool's own threads shut down cleanly instead of being left dangling
+// until the process exits on its own.
+async function shutdown() {
+  await shutdownWorkerPool();
+  server.close(() => process.exit(0));
+}
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);

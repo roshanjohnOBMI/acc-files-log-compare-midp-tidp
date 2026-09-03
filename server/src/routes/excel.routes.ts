@@ -1,8 +1,8 @@
 import { Router } from "express";
 import multer from "multer";
 import { downloadItemContent } from "../services/apsDataManagement.service.js";
-import { parseWorkbookBuffer } from "../services/excelParse.service.js";
 import { logEntry } from "../services/errorLog.service.js";
+import { runTask } from "../workers/workerPool.js";
 
 export const excelRouter = Router();
 
@@ -26,7 +26,10 @@ async function parseWithTimeout(buffer: Buffer, fileName: string) {
   return Promise.race([
     (async () => {
       const parseStarted = Date.now();
-      const parsed = await parseWorkbookBuffer(buffer, fileName);
+      // Run on a worker thread, not inline - exceljs parsing a large multi-tab MIDP is a genuinely
+      // CPU-heavy, mostly-synchronous job, and running it on the main thread would stall every
+      // other request (including the Activity log's own polling) for however long it takes.
+      const parsed = await runTask("parseTidpWorkbook", { buffer, fileName });
       const parseMs = Date.now() - parseStarted;
       logEntry(
         "excel",

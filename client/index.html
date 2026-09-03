@@ -3,11 +3,27 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      // Applied synchronously, before the first paint, so a saved "light"/"dark" choice never
+      // flashes the other theme for a frame - a plain "system" choice (no stored value) leaves
+      // the attribute unset and the stylesheet's prefers-color-scheme media query decides instead.
+      (function () {
+        try {
+          var stored = localStorage.getItem("acc-tidp-theme");
+          if (stored === "light" || stored === "dark") {
+            document.documentElement.setAttribute("data-theme", stored);
+          }
+        } catch (e) {
+          // Storage blocked (private window, locked-down policy) - falls back to the OS preference.
+        }
+      })();
+    </script>
     <link rel="icon" type="image/png" href="/obmi-mark.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Archivo:wght@300;600;700;800&family=Montserrat:wght@300;400;500;600;700&family=JetBrains+Mono:wght@500&display=swap"
       rel="stylesheet"
     />
     <title>OBMI · ACC Files Log vs TIDP/MIDP Checker</title>

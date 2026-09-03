@@ -1,12 +1,20 @@
 import { useSearchParams } from "react-router-dom";
 import { loginUrl } from "../api/auth";
+import { ThemeToggle } from "../components/ThemeToggle";
+import type { ThemeChoice } from "../hooks/useTheme";
 
-export function LoginPage() {
+interface LoginPageProps {
+  theme: ThemeChoice;
+  onChangeTheme: (theme: ThemeChoice) => void;
+}
+
+export function LoginPage({ theme, onChangeTheme }: LoginPageProps) {
   const [searchParams] = useSearchParams();
   const error = searchParams.get("error");
 
   return (
     <div className="login-page">
+      <ThemeToggle theme={theme} onChange={onChangeTheme} />
       <div className="login-card">
         <img className="login-logo" src="/obmi-logo.png" alt="OBMI" />
         <h1>ACC Files Log vs TIDP/MIDP Checker</h1>

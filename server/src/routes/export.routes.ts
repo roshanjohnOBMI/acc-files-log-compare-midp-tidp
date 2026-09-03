@@ -1,7 +1,8 @@
 import { Router } from "express";
-import { buildQaQcWorkbook, type ReportExportRequest } from "../services/reportExport.service.js";
+import type { ReportExportRequest } from "../services/reportExport.service.js";
 import { uploadFileToFolder } from "../services/apsDataManagement.service.js";
 import { logEntry } from "../services/errorLog.service.js";
+import { runTask } from "../workers/workerPool.js";
 
 export const exportRouter = Router();
 
@@ -17,7 +18,7 @@ exportRouter.post("/export/report", async (req, res, next) => {
       return;
     }
 
-    const buffer = await buildQaQcWorkbook(body);
+    const buffer = await runTask("buildQaQcWorkbook", { request: body });
 
     if (body.saveTo) {
       const { projectId, folderId } = body.saveTo;

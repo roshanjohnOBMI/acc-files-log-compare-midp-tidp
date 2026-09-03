@@ -64,8 +64,11 @@ export function FilesLogSourcePicker({
         <>
           <p className="hint">
             Check every folder that should be walked - files in each folder (and, if enabled, its
-            subfolders) become the Files Log to compare against. Checked folders are scanned
-            regardless of nesting (a folder nested under another checked folder is only scanned once).
+            subfolders) become the Files Log to compare against. Checking a folder also checks its
+            immediate subfolders, expanding it first if needed - with "Include subfolders" on
+            below, everything deeper than that is still walked when the scan runs, whether or not
+            it's checked here. Checked folders are scanned regardless of nesting (a folder nested
+            under another checked folder is only scanned once).
           </p>
           <FolderTreePicker
             hubId={hubId}

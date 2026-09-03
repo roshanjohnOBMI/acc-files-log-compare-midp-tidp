@@ -31,10 +31,15 @@ exportable as a log, and the full comparison as a branded QA/QC report. Repeat c
   from ACC or a local upload via multer), three ways of assembling the Files Log (a live recursive
   multi-folder scan, parsing an already-exported Files Log workbook from ACC, or a local upload of
   one), matching TIDP/MIDP rows against it (including the "deep search" combined match strategy),
-  saved setups (lowdb JSON store), and the error log.
+  saved setups (lowdb JSON store), and the error log. Workbook parsing, matching, and QA/QC report
+  generation each run on a small `worker_threads` pool (`server/src/workers/`) instead of the main
+  thread, so a large MIDP or a big Files Log doesn't stall other requests (or the Activity Log's
+  own polling) while it's being processed.
 - `client/` — React + TypeScript + Vite SPA. Has no Excel-parsing dependency at all - it gets back
-  ready-to-render JSON from the server - and drives the folder browsing, file uploads, row
-  filtering, Files Log source picking, and results UI.
+  ready-to-render JSON from the server. Shared workspace state (hub/project, the loaded workbook,
+  column mapping, Files Log, results) lives in one React Context (`client/src/context/`) so the
+  persistent top bar, the Workspace page, and the dedicated **Setup & mapping** page all read/act
+  on the same state. Supports light/dark/system theme (persisted, flash-free on load).
 
 See [`docs/REFERENCE.md`](docs/REFERENCE.md) for the full technical reference - API surface, data
 model, matching engine internals, QA/QC report structure, and the deployment record below in more
@@ -101,24 +106,23 @@ exact subject it presented if the federated credential doesn't match), and grant
 
 Once deployed, sign in with Autodesk at the app's Azure URL, then:
 
-1. Pick the hub and project.
-2. Provide the TIDP/MIDP workbook - **Pick from ACC** (browse and select the live `.xlsx`) or
-   **Upload from computer**.
-3. Filter the filled-in rows (per-column filters + text search) and pick the identifier column
-   (the column holding each document's base filename), formats column, and match mode (including
-   **Deep search**).
-4. Provide the Files Log - **Scan ACC folder(s) live** (check any number of folders; each, and its
-   subfolders if enabled, gets walked), **Pick existing file from ACC**, or **Upload from
-   computer**. Optionally turn on "only count files whose folder path contains…" (defaults to
-   `Shared`) to scope the comparison to files that have reached the Shared area.
-5. Click "Compare" and review the per-row, per-format results (including which match strategy hit,
-   under Deep search), then export the QA/QC report as `.xlsx` (download, or save straight back
-   into an ACC folder) and/or the activity/error log.
+1. Pick the hub and project in the top bar - this stays put across every page below.
+2. On **Workspace**: provide the TIDP/MIDP workbook (**Pick from ACC** or **Upload**) and the ACC
+   Files Log (**Scan folder(s) live**, **Pick existing file from ACC**, or **Upload**).
+3. Open **Setup & mapping** (linked from either "Edit / Setup" pill on Workspace) to configure the
+   comparison in one place: which tabs to include and each tab's header row, the identifier/
+   formats/planned-date/revision column mapping and match mode (including **Deep search**), row
+   filters, the Files Log's "only count files whose folder path contains…" keyword filter
+   (defaults to `Shared`), and a preview of exactly what will be compared.
+4. Back on **Workspace**, click **Compare** (also pinned in the top bar whenever a workbook is
+   loaded) and review the per-row, per-format results - including which match strategy hit, under
+   Deep search - then export the QA/QC report as `.xlsx` (download, or save straight back into an
+   ACC folder) and/or the activity/error log.
 
-Save the current hub/project/Files Log settings/column/format configuration as a named **setup**
-to skip re-picking everything next time - load it from the dropdown at the top of the workspace.
-The TIDP/MIDP source and the Files Log itself still need to be reselected/rerun/reuploaded each
-time, since both are either live ACC data or a local file that isn't persisted between sessions.
+Save the current configuration as a named **setup** under **Saved setups** to skip re-picking
+everything next time. The TIDP/MIDP source and the Files Log itself still need to be reselected/
+rerun/reuploaded each time, since both are either live ACC data or a local file that isn't
+persisted between sessions.
 
 ## Build
 
@@ -154,3 +158,12 @@ npm run build      # typechecks + builds both server (dist/) and client (dist/)
   retry/rate-limit warnings before assuming it's an infrastructure problem - it's almost always
   Autodesk-side throttling, not this app. Scoping a scan to fewer, more specific folders (rather
   than a broad top-level folder with subfolders included) is the most effective fix.
+- Checking a folder in the Files Log's multi-folder picker also checks its immediate subfolders
+  (expanding it first if needed) - a quick way to pick up everything one level down without
+  expanding and ticking each subfolder by hand. It's deliberately shallow (one level, not the
+  whole subtree): the scan itself already walks arbitrarily deep server-side when "Include
+  subfolders" is on, with the retry/backoff protection above - auto-checking every descendant here
+  client-side would just race that same API with none of those protections.
+- CPU-heavy work (parsing a workbook, matching rows, building the QA/QC export) runs on a small
+  pool of `worker_threads`, not the main request thread - so one large MIDP or Files Log being
+  processed doesn't stall other requests, including the Activity Log panel's own polling.

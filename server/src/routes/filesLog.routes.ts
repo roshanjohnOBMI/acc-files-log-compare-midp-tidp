@@ -1,9 +1,9 @@
 import { Router } from "express";
 import multer from "multer";
 import { scanFolders } from "../services/filesLogScan.service.js";
-import { parseFilesLogWorkbook } from "../services/filesLogParse.service.js";
 import { downloadItemContent } from "../services/apsDataManagement.service.js";
 import { logEntry } from "../services/errorLog.service.js";
+import { runTask } from "../workers/workerPool.js";
 import type { FilesLogScanFolder, IndexedFile } from "../types/domain.js";
 
 export const filesLogRouter = Router();
@@ -67,7 +67,7 @@ filesLogRouter.get("/files-log/parse", async (req, res, next) => {
     const { buffer, fileName } = await downloadItemContent(req.apsAccessToken, projectId, itemId);
     logEntry("files-log", "info", `Downloaded Files Log "${fileName}" from ACC (${(buffer.byteLength / 1024 / 1024).toFixed(2)} MB)`);
 
-    const files = await parseFilesLogWorkbook(buffer, fileName);
+    const files = await runTask("parseFilesLogWorkbook", { buffer, fileName });
 
     const response: FilesLogResponse = { files, foldersSkipped: 0, fileName };
     res.json(response);
@@ -93,7 +93,7 @@ filesLogRouter.post("/files-log/upload", upload.single("file"), async (req, res,
       "info",
       `Received uploaded Files Log "${req.file.originalname}" (${(req.file.size / 1024 / 1024).toFixed(2)} MB)`
     );
-    const files = await parseFilesLogWorkbook(req.file.buffer, req.file.originalname);
+    const files = await runTask("parseFilesLogWorkbook", { buffer: req.file.buffer, fileName: req.file.originalname });
     const response: FilesLogResponse = { files, foldersSkipped: 0, fileName: req.file.originalname };
     res.json(response);
   } catch (err) {

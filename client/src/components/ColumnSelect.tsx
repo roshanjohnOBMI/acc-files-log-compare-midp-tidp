@@ -29,8 +29,12 @@ export function ColumnSelect({
 }: ColumnSelectProps) {
   return (
     <div className="column-select">
+      {/* Each label's text is its own <span> (not a bare text node) so `.column-select label`'s
+          `display: contents` (see index.css) can hand it off as an independent grid item, sized
+          to its own line count - which is what keeps every <select> below starting at the same
+          height regardless of how many lines its own label text happens to wrap to. */}
       <label>
-        Identifier column (base filename to search for)
+        <span className="field-label-text">Identifier column (base filename to search for)</span>
         <select value={identifierColumn ?? ""} onChange={(e) => onChangeColumn(e.target.value)}>
           <option value="">Select a column…</option>
           {headers.map((header) => (
@@ -41,7 +45,7 @@ export function ColumnSelect({
         </select>
       </label>
       <label>
-        Formats column (comma-separated, e.g. "pdf, dwg")
+        <span className="field-label-text">Formats column (comma-separated, e.g. "pdf, dwg")</span>
         <select value={formatsColumn ?? ""} onChange={(e) => onChangeFormatsColumn(e.target.value)}>
           <option value="">Select a column…</option>
           {headers.map((header) => (
@@ -52,7 +56,7 @@ export function ColumnSelect({
         </select>
       </label>
       <label>
-        Planned Issue Date column (optional - filter below)
+        <span className="field-label-text">Planned Issue Date column (optional - filter below)</span>
         <select value={plannedDateColumn ?? ""} onChange={(e) => onChangePlannedDateColumn(e.target.value)}>
           <option value="">None</option>
           {headers.map((header) => (
@@ -63,7 +67,7 @@ export function ColumnSelect({
         </select>
       </label>
       <label>
-        Revision column (optional - checked against the Files Log)
+        <span className="field-label-text">Revision column (optional - checked against the Files Log)</span>
         <select value={revisionColumn ?? ""} onChange={(e) => onChangeRevisionColumn(e.target.value)}>
           <option value="">None</option>
           {headers.map((header) => (
@@ -74,7 +78,7 @@ export function ColumnSelect({
         </select>
       </label>
       <label>
-        Match mode
+        <span className="field-label-text">Match mode</span>
         <select value={matchMode} onChange={(e) => onChangeMatchMode(e.target.value as MatchMode)}>
           <option value="exact">Exact match</option>
           <option value="startsWith">File name starts with identifier</option>

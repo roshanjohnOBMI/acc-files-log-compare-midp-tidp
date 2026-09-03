@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { isMainThread, parentPort } from "node:worker_threads";
 import type { LogEntry, LogSeverity } from "../types/domain.js";
 
 const entries: LogEntry[] = [];
@@ -15,6 +16,17 @@ export function logEntry(
   message: string,
   context?: Record<string, unknown>
 ): void {
+  // Excel parsing/matching/export building can run on a worker thread (see workers/workerPool.ts)
+  // to keep the main thread's event loop free - but each thread gets its own copy of this module,
+  // with its own private `entries` array. A worker's warnings would otherwise vanish into a log
+  // nobody ever reads (the /api/log endpoint only ever runs on the main thread). Forward instead
+  // of storing locally; workerPool.ts re-calls this same function on the main thread on receipt,
+  // which is what actually appends to `entries` and respects MAX_ENTRIES below.
+  if (!isMainThread && parentPort) {
+    parentPort.postMessage({ __log: true, stage, severity, message, context });
+    return;
+  }
+
   entries.push({
     timestamp: new Date().toISOString(),
     stage,
