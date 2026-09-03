@@ -1,7 +1,7 @@
 # ACC Files Log vs TIDP/MIDP Checker — Technical Reference
 
 Architecture, workflow, API surface, and deployment record for the OBMI submittal-QA tool built on
-Autodesk Construction Cloud (ACC). Current version **1.2.1** - see
+Autodesk Construction Cloud (ACC). Current version **1.3.0** - see
 [`../CHANGELOG.md`](../CHANGELOG.md) for full version history.
 
 ## Contents
@@ -98,6 +98,10 @@ pinned **Compare** button) sits above three pages, all reading and acting on the
 `WorkspaceContext` state. A step tracker (`StepGuide`) at the top of Workspace shows progress
 through file → Files Log → results at a glance, and a one-time "start here" callout
 (`useOnceFlag`, persisted per browser) points at the first thing to click on a brand-new session.
+The help panel's very first auto-opened view (same first-visit flag) carries one extra tip -
+confirm the tab/header-row/column mapping in Setup & mapping before comparing - not shown on
+later manual opens; that first view can only be dismissed via its Close button, not by clicking
+outside it.
 
 **Workspace** - the day-to-day page:
 

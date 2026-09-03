@@ -8,10 +8,12 @@ import { useOnceFlag } from "../hooks/useOnceFlag";
 export function HelpPanel() {
   const [everOpened, markEverOpened] = useOnceFlag("acc-tidp-help-seen");
   const [open, setOpen] = useState(false);
+  const [isFirstVisit, setIsFirstVisit] = useState(false);
 
   useEffect(() => {
     if (!everOpened) {
       setOpen(true);
+      setIsFirstVisit(true);
       markEverOpened();
     }
     // Only ever meant to fire once, on mount - not on every render of the (stable, useCallback'd)
@@ -33,7 +35,7 @@ export function HelpPanel() {
 
       {open && (
         <>
-          <div className="help-panel-backdrop" onClick={() => setOpen(false)} />
+          <div className="help-panel-backdrop" />
           <aside className="help-panel" role="dialog" aria-label="Guide">
             <div className="help-panel-head">
               <h3>Guide</h3>
@@ -69,6 +71,12 @@ export function HelpPanel() {
             <div className="help-panel-tips">
               <h4>Tips</h4>
               <ul>
+                {isFirstVisit && (
+                  <li>
+                    <strong>First time here?</strong> Open "Setup &amp; mapping" first and confirm
+                    the tabs, header row, and column mapping match your workbook before comparing.
+                  </li>
+                )}
                 <li>
                   Uploaded files (either side) aren't tracked against ACC's version history - pick
                   from ACC when you can.

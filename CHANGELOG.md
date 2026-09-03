@@ -7,6 +7,17 @@ for fixes, MAJOR reserved for breaking changes to saved setups or the QA/QC repo
 
 Every production update should add an entry here before/with the deploy that ships it.
 
+## [1.3.0] - 2026-09-04
+
+### Added
+- The help panel's auto-opened first view (a brand-new browser's very first visit only) now
+  includes an extra tip: open "Setup & mapping" first and confirm tabs/header row/column mapping
+  match your workbook before comparing. Later manual opens (via the "?" trigger) don't repeat it.
+
+### Changed
+- The help panel no longer closes when clicking its backdrop - only the explicit "Close" button
+  does now, so the first-visit tip above can't be dismissed by an accidental outside click.
+
 ## [1.2.1] - 2026-09-03
 
 ### Fixed

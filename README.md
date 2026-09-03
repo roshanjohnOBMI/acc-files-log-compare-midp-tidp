@@ -1,6 +1,6 @@
 # ACC Files Log vs TIDP/MIDP Checker
 
-**v1.2.1** - see [`CHANGELOG.md`](CHANGELOG.md) for version history and what changed in each
+**v1.3.0** - see [`CHANGELOG.md`](CHANGELOG.md) for version history and what changed in each
 release.
 
 Checks a TIDP/MIDP Excel schedule against an Autodesk Construction Cloud (ACC) **Files Log**
