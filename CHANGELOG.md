@@ -7,6 +7,17 @@ for fixes, MAJOR reserved for breaking changes to saved setups or the QA/QC repo
 
 Every production update should add an entry here before/with the deploy that ships it.
 
+## [1.2.1] - 2026-09-03
+
+### Fixed
+- **Saved setups could fail to write on a fresh deploy.** `server/data/` is gitignored (it holds
+  only runtime state), so a clean checkout - which is what every deploy actually is - doesn't
+  contain it; lowdb's writer creates `setups.json` on first use but never its parent directory, so
+  every `POST`/`PUT /api/setups` call failed with `ENOENT` until something else happened to create
+  the folder first. The server now creates `server/data/` itself at startup if it's missing.
+- Browser tab favicon pointed at `/obmi-mark.png`, removed in 1.1.0's branding update — was a
+  broken image request on every page load. Points at the wordmark image instead.
+
 ## [1.2.0] - 2026-09-03
 
 ### Added

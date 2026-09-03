@@ -1,11 +1,20 @@
 import { JSONFilePreset } from "lowdb/node";
 import { fileURLToPath } from "node:url";
+import fs from "node:fs";
 import path from "node:path";
 import { v4 as uuidv4 } from "uuid";
 import type { Setup } from "../types/domain.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dbPath = path.join(__dirname, "..", "..", "data", "setups.json");
+const dataDir = path.join(__dirname, "..", "..", "data");
+const dbPath = path.join(dataDir, "setups.json");
+
+/* lowdb writes via a `<file>.tmp` + rename, but never creates the parent directory itself - it
+   only conjures the *file* on first use. `data/` holds nothing else worth committing (setups.json
+   is gitignored, being runtime state), so a fresh deploy checkout can easily lack the directory
+   entirely, and every save then fails with ENOENT on the .tmp write. Guarantee it exists instead
+   of depending on deployment artifacts. */
+fs.mkdirSync(dataDir, { recursive: true });
 
 interface DbShape {
   setups: Setup[];

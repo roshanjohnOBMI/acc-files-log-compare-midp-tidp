@@ -1,7 +1,7 @@
 # ACC Files Log vs TIDP/MIDP Checker — Technical Reference
 
 Architecture, workflow, API surface, and deployment record for the OBMI submittal-QA tool built on
-Autodesk Construction Cloud (ACC). Current version **1.2.0** - see
+Autodesk Construction Cloud (ACC). Current version **1.2.1** - see
 [`../CHANGELOG.md`](../CHANGELOG.md) for full version history.
 
 ## Contents
@@ -386,7 +386,7 @@ see [Deployment](#deployment).
 | Area                 | Behavior                                                                 |
 | ---------------------- | ---------------------------------------------------------------------------- |
 | Sessions              | In-memory (`express-session` default store) - fine for a single instance; a restart signs everyone out. |
-| Saved setups          | `server/data/setups.json`                                                  |
+| Saved setups          | `server/data/setups.json` - the `server/data/` directory (gitignored, runtime-only) is created at startup if missing, since a fresh deploy checkout won't have it. |
 | Uploads               | 50MB cap, held in memory only for the request - never written to disk.     |
 | Blank rows            | Dropped automatically when the TIDP/MIDP workbook is parsed.               |
 | "Only Shared" filter  | Plain case-insensitive substring match on folder path - a file with no folder-path column is left in regardless, with a logged warning. |

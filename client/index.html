@@ -19,7 +19,11 @@
         }
       })();
     </script>
-    <link rel="icon" type="image/png" href="/obmi-mark.png" />
+    <!-- No square icon-shaped mark is available in client/public/ right now (only the wide
+         "OBMI Wordmark" lockup, ~5.3:1) - browsers will letterbox it into the tab icon rather
+         than stretch it, which is legible but not crisp. Swap this for a proper square favicon
+         (e.g. a 32x32/64x64 PNG of just the "O" mark) whenever one's available. -->
+    <link rel="icon" type="image/png" href="/obmi-wordmark-navy.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
