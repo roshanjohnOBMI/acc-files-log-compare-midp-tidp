@@ -16,7 +16,8 @@ export function LoginPage({ theme, onChangeTheme }: LoginPageProps) {
     <div className="login-page">
       <ThemeToggle theme={theme} onChange={onChangeTheme} />
       <div className="login-card">
-        <img className="login-logo" src="/obmi-logo.png" alt="OBMI" />
+        <img className="login-logo theme-img-light" src="/obmi-wordmark-navy.png" alt="OBMI" />
+        <img className="login-logo theme-img-dark" src="/obmi-wordmark-offwhite.png" alt="OBMI" />
         <h1>ACC Files Log vs TIDP/MIDP Checker</h1>
         <p>Sign in with your Autodesk account to compare a TIDP/MIDP schedule against an ACC Files Log.</p>
         {error && <p className="error-text">Login failed: {error}</p>}

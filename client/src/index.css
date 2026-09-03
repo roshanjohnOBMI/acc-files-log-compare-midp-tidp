@@ -11,7 +11,10 @@
   --border: #c2c4c3;
   --border-strong: color-mix(in srgb, #324252 40%, transparent);
   --text: #201e1d;
-  --text-muted: #6b7480;
+  /* Was #6b7480 - contrast against --surface-solid landed at ~4.2:1, under the 4.5:1 body-text
+     threshold for the many small (0.7-0.85rem) muted labels/hints on this warm, mid-toned ground.
+     This darker shade clears ~5.6:1 while keeping the same hue. */
+  --text-muted: #57616c;
 
   --accent-blue: #324252;
   --accent-cyan: #4d7d76;
@@ -93,14 +96,29 @@ body {
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-/* The OBMI mark is dark ink drawn for a light background - flip it back to legible on dark. */
+/* Swaps in the real light-on-dark / dark-on-light OBMI wordmark asset for the current theme,
+   rather than approximating one from the other with a CSS filter - every themed logo/mark image
+   in the app (login page, sub-nav) is a pair of <img> tags, one per variant, tagged with one of
+   these two classes; only one is ever visible at a time. */
+.theme-img-light {
+  display: block;
+}
+.theme-img-dark {
+  display: none;
+}
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .login-logo {
-    filter: invert(1) brightness(1.15);
+  :root:not([data-theme="light"]) .theme-img-light {
+    display: none;
+  }
+  :root:not([data-theme="light"]) .theme-img-dark {
+    display: block;
   }
 }
-:root[data-theme="dark"] .login-logo {
-  filter: invert(1) brightness(1.15);
+:root[data-theme="dark"] .theme-img-light {
+  display: none;
+}
+:root[data-theme="dark"] .theme-img-dark {
+  display: block;
 }
 
 h1, h2, h3 {
@@ -170,6 +188,18 @@ button.danger:hover {
 .workspace .run-comparison-bar > button[type="button"]:first-child:hover {
   background: color-mix(in srgb, var(--accent-blue) 85%, black);
   border-color: color-mix(in srgb, var(--accent-blue) 85%, black);
+}
+
+/* The blanket `button:disabled { opacity: 0.4 }` reads fine on an outline button (its border/text
+   just fades against the page), but on a SOLID filled button it washes the fill toward the page's
+   own background - in light mode that leaves near-white text on a barely-there pale blue, which
+   is nearly unreadable. Give solid buttons their own disabled treatment instead of fading them. */
+.btn-primary:disabled, .button-link.primary:disabled,
+.workspace .run-comparison-bar > button[type="button"]:first-child:disabled {
+  opacity: 1;
+  background: var(--text-muted);
+  border-color: var(--text-muted);
+  color: var(--surface-solid);
 }
 
 .btn-secondary {
@@ -323,7 +353,10 @@ label {
   width: 100%;
   max-width: 220px;
   margin: 0 auto 1.75rem;
-  display: block;
+  /* No `display` here on purpose - .theme-img-light/.theme-img-dark (index.css, near the top)
+     fully own it, toggling which of the two logo variants is shown. Declaring `display: block`
+     here too would tie with theirs on specificity and win on source order, showing both stacked
+     regardless of theme. */
 }
 
 .login-card h1 {
@@ -343,14 +376,44 @@ label {
   min-height: 100vh;
 }
 
-.app-topbar {
+.app-header {
   position: sticky;
   top: 0;
   z-index: 40;
+}
+
+.app-topbar {
+  /* Explicit (not content-derived) so other elements elsewhere - the Setup & mapping page's
+     sidebar nav, currently - can calibrate their own sticky `top` against a known, fixed combined
+     header height (.app-topbar's + .app-subnav's 60px) instead of guessing. */
+  height: 64px;
   display: flex;
   align-items: stretch;
+  gap: 20px;
+  padding-left: 20px;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
+}
+
+/* The one brand mark on the page - top-left corner of every tab, first thing in reading order,
+   so it needs to read as "the app's icon" rather than blend into the row of controls beside it:
+   a filled accent chip (not just an outline) with its own shadow and a permanent soft glow. */
+.app-logo-chip {
+  display: flex;
+  align-items: center;
+  flex: none;
+  align-self: center;
+  padding: 8px 18px;
+  border: 2px solid var(--accent-blue);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent-blue) 10%, var(--surface-solid));
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--accent-blue) 25%, transparent);
+}
+
+.app-logo-mark {
+  height: 24px;
+  width: auto;
+  flex: none;
 }
 
 .app-topbar-selects {
@@ -366,8 +429,8 @@ label {
 .app-topbar-selects .hub-project-select label {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  padding: 9px 20px;
+  gap: 3px;
+  padding: 13px 26px;
   border-right: 1px solid var(--border);
   margin-bottom: 0;
   min-width: 190px;
@@ -397,10 +460,11 @@ label {
 .app-topbar-user {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 0 24px;
+  gap: 18px;
+  padding: 0 28px;
   font-size: 0.8rem;
   color: var(--text-muted);
+  border-left: 1px solid var(--border);
 }
 
 .app-topbar-user button {
@@ -408,51 +472,155 @@ label {
   font-size: 0.75rem;
 }
 
-.app-subnav {
-  position: sticky;
-  top: 57px;
-  z-index: 35;
+/* ── Help panel: a "?" trigger docked top-right (already where .app-topbar-user sits) opening a
+   short reference panel anchored to the same corner - not a full onboarding-tour library, just a
+   dismissible flyout the user can reopen anytime. ── */
+/* Filled (not outline, like most buttons here) and given a permanent soft glow - it's the one
+   always-available entry point to the guide, so it should read as inviting to click rather than
+   blend in with plainer secondary buttons. The glow is a GPU box-shadow keyframe (same low-cost
+   technique as .cta-pulse/.step-guide-current), not a JS animation. */
+.help-trigger {
+  /* Matches the theme toggle's own rendered height (0.35rem padding + 1-line 0.85rem text + its
+     1px border ~= 27px) so the two sit at the same visual size in the topbar-user cluster instead
+     of the help button looming over its neighbor. */
+  width: 27px;
+  height: 27px;
+  padding: 0;
+  border-radius: 50%;
+  /* The base `button` rule is only `align-items:center` (no justify-content) - fine for buttons
+     with left-aligned icon+label content, but it leaves this single "?" glyph sitting at the
+     flex-start edge of a circle instead of centered in it. */
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.78rem;
+  line-height: 1;
+  background: var(--gradient-btn);
+  border-color: var(--gradient-btn);
+  color: var(--surface-solid);
+  animation: help-trigger-glow 2.6s ease-in-out infinite;
+}
+
+.help-trigger:hover {
+  background: color-mix(in srgb, var(--accent-blue) 85%, black);
+}
+
+@keyframes help-trigger-glow {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent-blue) 40%, transparent); }
+  50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-blue) 0%, transparent); }
+}
+
+.help-panel-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+}
+
+.help-panel {
+  position: fixed;
+  /* .app-topbar's explicit 64px + .app-subnav's explicit 60px, plus a little breathing room -
+     see .app-topbar's comment. */
+  top: 132px;
+  right: 20px;
+  width: 320px;
+  max-width: calc(100vw - 40px);
+  max-height: calc(100vh - 152px);
+  overflow-y: auto;
+  background: var(--surface-solid);
+  border: 1px solid var(--accent-blue);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  padding: 18px;
+  z-index: 56;
+  animation: help-panel-in 0.18s ease-out;
+}
+
+@keyframes help-panel-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.help-panel-head {
   display: flex;
   align-items: center;
-  gap: 28px;
-  padding: 0 24px;
-  height: 48px;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.help-panel-head h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.help-panel-steps {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.help-panel-steps li strong {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--accent-blue);
+  margin-bottom: 3px;
+}
+
+.help-panel-steps li p {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.help-panel-tips h4 {
+  margin: 0 0 8px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.help-panel-tips ul {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.help-panel-tips li {
+  font-size: 0.78rem;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.app-subnav {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  padding: 0 28px;
+  height: 60px;
   background: var(--surface);
   border-bottom: 2px solid var(--accent-blue);
 }
 
-.app-subnav-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-weight: 700;
+/* The brand mark itself now lives at the very start of .app-topbar (see .app-logo-chip) - this
+   bar just carries the app's full name as plain text next to the section tabs. */
+.app-subnav-title {
+  color: var(--text-muted);
+  font-weight: 600;
   font-size: 0.85rem;
   letter-spacing: 0.01em;
   white-space: nowrap;
 }
 
-.app-subnav-mark {
-  width: 22px;
-  height: 22px;
-  flex: none;
-  display: block;
-}
-
-/* Same reason as .login-logo: the mark is dark ink on a transparent background, drawn for a
-   light surface - invert it back to visible on the dark-theme subnav (var(--surface) there is
-   near-black). */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .app-subnav-mark {
-    filter: invert(1) brightness(1.15);
-  }
-}
-:root[data-theme="dark"] .app-subnav-mark {
-  filter: invert(1) brightness(1.15);
-}
-
 .app-subnav-tabs {
   display: flex;
-  gap: 4px;
+  gap: 6px;
 }
 
 .app-subnav-tabs a {
@@ -518,6 +686,16 @@ main {
   color: var(--warning);
 }
 
+.warning-note {
+  margin: 0.5rem 0;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  color: var(--text);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
 .card {
   background: var(--surface-raised);
   border: 1px solid var(--border);
@@ -534,10 +712,146 @@ main {
   margin: 1.25rem 0;
 }
 
+/* First-visit-only nudge pointing at the very first actionable thing in a fresh session - see
+   WorkspacePage's useOnceFlag("acc-tidp-onboarding-seen"). */
+.onboarding-callout {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  border: 1px solid var(--highlight);
+  background: color-mix(in srgb, var(--highlight) 14%, transparent);
+  font-size: 0.85rem;
+  animation: onboarding-callout-in 0.25s ease-out;
+}
+
+.onboarding-callout-icon {
+  font-size: 1rem;
+  flex: none;
+}
+
+.onboarding-callout > span:not(.onboarding-callout-icon) {
+  flex: 1;
+}
+
+@keyframes onboarding-callout-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* ── Numbered sections (01 / 02 / 03) - the app's main structural device, mirroring the
    reference layout's stepwise "TIDP/MIDP file → ACC Files Log → Results" flow. ── */
 .workspace, .setups-page {
   padding-top: 4px;
+}
+
+/* ── Step guide: a plain CSS progress tracker, not a JS wizard/tour library - every step's status
+   is derived from state that already exists (a file loaded, the Files Log loaded, a comparison
+   run), so there's no separate "current step" state to keep in sync, and the only animation
+   (the current step's dot) runs on the GPU compositor via a CSS keyframe, not a JS render loop. ── */
+.step-guide {
+  display: flex;
+  align-items: center;
+  list-style: none;
+  margin: 0;
+  padding: 14px 0;
+  gap: 0;
+}
+
+.step-guide-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.step-guide-item:last-child {
+  flex: 0 0 auto;
+}
+
+.step-guide-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 0.68rem;
+  font-weight: 700;
+  border: 1.5px solid var(--border-strong);
+  color: var(--text-muted);
+  background: var(--surface-solid);
+  flex: none;
+}
+
+.step-guide-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.step-guide-connector {
+  flex: 1;
+  height: 2px;
+  background: var(--border);
+  margin: 0 6px;
+}
+
+.step-guide-done .step-guide-dot {
+  border-color: var(--success);
+  background: var(--success);
+  color: var(--surface-solid);
+}
+
+.step-guide-done .step-guide-label {
+  color: var(--text);
+}
+
+.step-guide-done .step-guide-connector {
+  background: var(--success);
+}
+
+.step-guide-current .step-guide-dot {
+  border-color: var(--highlight);
+  color: var(--accent-blue);
+  background: var(--highlight);
+  animation: step-guide-pulse 2s ease-in-out infinite;
+}
+
+.step-guide-current .step-guide-label {
+  color: var(--text);
+}
+
+@keyframes step-guide-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--highlight) 55%, transparent); }
+  50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--highlight) 0%, transparent); }
+}
+
+/* Critical-action emphasis: a gentle pulsing ring (GPU box-shadow keyframe, same low-cost
+   technique as the step guide's dot above) on whichever "primary next action" button is actually
+   actionable right now - opted into per-button via this class, not a blanket .btn-primary rule,
+   so it stays meaningful (only ever one or two buttons pulsing, never every button on the page). */
+.cta-pulse {
+  animation: cta-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes cta-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent-blue) 35%, transparent); }
+  50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent-blue) 0%, transparent); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .step-guide-current .step-guide-dot,
+  .cta-pulse,
+  .help-panel,
+  .help-trigger,
+  .onboarding-callout {
+    animation: none;
+  }
 }
 
 .numbered-section {
@@ -600,6 +914,8 @@ main {
 }
 
 .source-summary-chip-name {
+  flex: 1;
+  min-width: 0;
   font-size: 0.85rem;
   font-weight: 700;
   overflow: hidden;
@@ -671,6 +987,7 @@ main {
   padding: 0.6rem;
   max-height: 260px;
   overflow-y: auto;
+  overflow-x: auto;
   margin: 0.5rem 0 1rem;
   background: var(--surface-solid);
 }
@@ -878,12 +1195,13 @@ main {
 
 .export-destination-toggle {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 0.85rem;
 }
 
 .export-destination-toggle button {
-  flex: 1;
+  flex: 1 1 160px;
   border: 1px solid var(--border-strong);
   background: transparent;
   color: var(--text-muted);
@@ -1172,6 +1490,7 @@ tbody tr:hover {
   gap: 0;
   margin: 18px 0 0;
   border-bottom: 2px solid var(--accent-blue);
+  overflow-x: auto;
 }
 
 .result-tab {
@@ -1184,6 +1503,8 @@ tbody tr:hover {
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  flex: none;
+  white-space: nowrap;
 }
 
 .result-tab.active {
@@ -1337,7 +1658,8 @@ tbody tr:hover {
   border-right: 1px solid var(--border);
   padding: 18px 0;
   position: sticky;
-  top: 110px;
+  /* .app-topbar's explicit 64px + .app-subnav's explicit 60px - see .app-topbar's comment. */
+  top: 124px;
 }
 
 .setup-mapping-nav-item {
@@ -1447,7 +1769,13 @@ tbody tr:hover {
 }
 
 @media (max-width: 720px) {
+  /* A wrapped, multi-row header staying sticky would eat too much of a small screen permanently -
+     let it scroll away instead. */
+  .app-header {
+    position: static;
+  }
   .app-topbar {
+    height: auto;
     flex-wrap: wrap;
   }
   .app-topbar-user {
@@ -1457,11 +1785,21 @@ tbody tr:hover {
     height: auto;
     flex-wrap: wrap;
     padding: 10px 16px;
-    top: auto;
-    position: static;
   }
-  .app-topbar {
-    position: static;
+  /* The full app title is long enough that forcing it onto one line (the desktop nowrap) can
+     outrun a narrow phone's width - let it wrap instead of overflowing. */
+  .app-subnav-title {
+    white-space: normal;
+  }
+  /* The header isn't sticky at this width (see .app-header above), so its rendered height no
+     longer means anything fixed to calibrate against - just dock near the top of the viewport. */
+  .help-panel {
+    top: 12px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+    max-width: none;
+    max-height: calc(100vh - 24px);
   }
   .results-summary {
     grid-template-columns: repeat(3, 1fr);
@@ -1469,5 +1807,42 @@ tbody tr:hover {
   .saved-setup-row {
     flex-direction: column;
     align-items: flex-start;
+  }
+  /* Once these action clusters wrap onto their own line below a section's title (the parent
+     header is already flex-wrap), the auto margin that pushed them to the right of a shared line
+     has nothing left to push against - reset it so they simply left-align under the title. */
+  .numbered-section-actions,
+  .setup-mapping-head-actions {
+    margin-left: 0;
+  }
+  /* Three step labels at full nowrap width don't fit a phone-width row - let them wrap to two
+     lines instead, and give the flex items room to actually shrink below their content size. */
+  .step-guide-item {
+    min-width: 0;
+  }
+  .step-guide-label {
+    white-space: normal;
+    font-size: 0.62rem;
+  }
+  .step-guide-connector {
+    margin: 0 4px;
+  }
+  /* The desktop layout's two-row grid (label row, then select row, one column per field - see the
+     comment on the base .column-select rule) relies on side-by-side columns to make sense; below
+     this width there isn't room for that, so fall back to a single column and let auto-flow just
+     stack every [label, select] pair top to bottom instead of requiring horizontal scrolling. */
+  .column-select {
+    grid-template-rows: none;
+    grid-auto-flow: row;
+    grid-template-columns: 1fr;
+  }
+  .field-label-text {
+    align-self: start;
+  }
+}
+
+@media (max-width: 480px) {
+  .results-summary {
+    grid-template-columns: repeat(2, 1fr);
   }
 }

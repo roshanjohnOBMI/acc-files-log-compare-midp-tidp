@@ -28,6 +28,12 @@ setupsRouter.post("/setups", async (req, res, next) => {
 setupsRouter.put("/setups/:id", async (req, res, next) => {
   try {
     const body = req.body as Omit<Setup, "id" | "createdAt" | "updatedAt">;
+    // Same requirement as creating one - without this, a client-side bug (or a hand-built request)
+    // could silently blank out a setup's name/hub/project instead of the request failing loudly.
+    if (!body.name || !body.hubId || !body.projectId) {
+      res.status(400).json({ error: "name, hubId, and projectId are required" });
+      return;
+    }
     const updated = await updateSetup(req.params.id, body);
     if (!updated) {
       res.status(404).json({ error: "Setup not found" });

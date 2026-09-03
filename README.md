@@ -1,5 +1,8 @@
 # ACC Files Log vs TIDP/MIDP Checker
 
+**v1.2.0** - see [`CHANGELOG.md`](CHANGELOG.md) for version history and what changed in each
+release.
+
 Checks a TIDP/MIDP Excel schedule against an Autodesk Construction Cloud (ACC) **Files Log**
 instead of a live per-folder search. Both the TIDP/MIDP schedule and the Files Log can each come
 from **either** of two places:
@@ -120,9 +123,14 @@ Once deployed, sign in with Autodesk at the app's Azure URL, then:
    ACC folder) and/or the activity/error log.
 
 Save the current configuration as a named **setup** under **Saved setups** to skip re-picking
-everything next time. The TIDP/MIDP source and the Files Log itself still need to be reselected/
+everything next time - the same dialog that saves changes back to a loaded setup also lets you
+rename it inline. The TIDP/MIDP source and the Files Log itself still need to be reselected/
 rerun/reuploaded each time, since both are either live ACC data or a local file that isn't
 persisted between sessions.
+
+A step tracker at the top of Workspace shows where you are (file → Files Log → results), a
+one-time "start here" callout points at the first thing to click on a brand-new browser, and a "?"
+in the top bar opens a short in-app guide any time.
 
 ## Build
 

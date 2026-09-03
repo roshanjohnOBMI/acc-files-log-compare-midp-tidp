@@ -1,7 +1,8 @@
 # ACC Files Log vs TIDP/MIDP Checker — Technical Reference
 
 Architecture, workflow, API surface, and deployment record for the OBMI submittal-QA tool built on
-Autodesk Construction Cloud (ACC).
+Autodesk Construction Cloud (ACC). Current version **1.2.0** - see
+[`../CHANGELOG.md`](../CHANGELOG.md) for full version history.
 
 ## Contents
 
@@ -92,18 +93,23 @@ flash of the wrong theme).
 
 ## Core workflow
 
-A persistent top bar (hub/project pickers, theme toggle, sign-out, and a pinned **Compare**
-button) sits above three pages, all reading and acting on the same `WorkspaceContext` state:
+A persistent top bar (hub/project pickers, theme toggle, a "?" help trigger, sign-out, and a
+pinned **Compare** button) sits above three pages, all reading and acting on the same
+`WorkspaceContext` state. A step tracker (`StepGuide`) at the top of Workspace shows progress
+through file → Files Log → results at a glance, and a one-time "start here" callout
+(`useOnceFlag`, persisted per browser) points at the first thing to click on a brand-new session.
 
 **Workspace** - the day-to-day page:
 
 1. **TIDP/MIDP file** - `acc` (browse and pick the live workbook) or `upload`. Header row
    auto-detected from the sheet's frozen pane, or the row with the most filled cells as a
-   fallback. A compact summary pill (tab, header row, filled-row count, column mapping, match
-   mode) links out to Setup & mapping to change any of it.
+   fallback. Collapses to a compact summary chip once loaded ("Change source" re-expands it), with
+   a pill linking out to Setup & mapping to change tab/column/match-mode choices. Uploaded files
+   carry a staleness warning - they aren't linked to ACC's version history.
 2. **ACC Files Log** - `scan` (walk folder(s) live - checking a folder also checks its immediate
-   subfolders), `file` (pick an exported log workbook from ACC), or `upload`. A summary pill shows
-   the current folder-path filter and how many files it leaves in, linking to Setup & mapping.
+   subfolders), `file` (pick an exported log workbook from ACC), or `upload` (same staleness
+   warning). Also collapses to a summary chip once loaded; a pill shows the current folder-path
+   filter and how many files it leaves in, linking to Setup & mapping.
 3. **Results** - run the comparison, export the QA/QC report (download or save to an ACC folder),
    and switch between the results table and the activity/error log.
 
@@ -124,7 +130,9 @@ either "Edit / Setup" pill above:
 collapsible full table). Loading one restores the hub/project, Files Log source settings, column
 mapping, and match mode into Workspace; the source file and Files Log itself still need to be
 reselected/rerun, since both are either live ACC data or a local file not persisted between
-sessions.
+sessions. The "Update with current settings" action on Workspace/Setup & mapping also carries an
+editable name field, so renaming a loaded setup happens in the same step as saving its other
+changes back.
 
 ## Data sources
 
@@ -231,7 +239,7 @@ actual auth rejection (not a transient APS outage).
 | POST   | `/search/run`                    | Runs the match engine; best-effort revision lookup if `projectId` is given. |
 | GET    | `/setups`                        | List saved setups.                                     |
 | POST   | `/setups`                        | Create a setup.                                         |
-| PUT    | `/setups/:id`                    | Update a setup.                                          |
+| PUT    | `/setups/:id`                    | Update a setup. Validates `name`/`hubId`/`projectId` are present, same as create. |
 | DELETE | `/setups/:id`                    | Delete a setup.                                          |
 | GET    | `/log`                           | Activity/error log entries, newest first.                |
 | DELETE | `/log`                           | Clears the in-memory log.                                 |

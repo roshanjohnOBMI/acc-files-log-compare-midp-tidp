@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createSetup, updateSetup, type SetupInput } from "../api/setups";
 import type { Setup } from "../types/domain";
 
@@ -14,9 +14,17 @@ interface SetupSaveDialogProps {
 
 export function SetupSaveDialog({ disabled, getInput, activeSetup, onSaved, onUpdated }: SetupSaveDialogProps) {
   const [name, setName] = useState("");
+  // Separate field (not the "save as new" one above) so renaming a loaded setup while updating it
+  // doesn't fight with typing a name for an unrelated new one - starts out matching the loaded
+  // setup's current name, editable from there.
+  const [updateName, setUpdateName] = useState("");
   const [saving, setSaving] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setUpdateName(activeSetup?.name ?? "");
+  }, [activeSetup?.id, activeSetup?.name]);
 
   async function handleSave() {
     if (!name.trim()) {
@@ -38,10 +46,17 @@ export function SetupSaveDialog({ disabled, getInput, activeSetup, onSaved, onUp
 
   async function handleUpdate() {
     if (!activeSetup) return;
+    const trimmedName = updateName.trim();
+    if (!trimmedName) {
+      setError("This setup needs a name - it can't be saved blank.");
+      return;
+    }
     setUpdating(true);
     setError(null);
     try {
-      const setup = await updateSetup(activeSetup.id, { ...getInput(), name: activeSetup.name });
+      // Renaming happens right here, alongside every other setting - there's no separate "save"
+      // step for the name, since it's just another field on the same record.
+      const setup = await updateSetup(activeSetup.id, { ...getInput(), name: trimmedName });
       onUpdated(setup);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update setup");
@@ -54,8 +69,15 @@ export function SetupSaveDialog({ disabled, getInput, activeSetup, onSaved, onUp
     <div className="setup-save-dialog-group">
       {activeSetup && (
         <div className="setup-save-dialog">
-          <button type="button" onClick={handleUpdate} disabled={disabled || updating}>
-            {updating ? "Updating…" : `Update "${activeSetup.name}" with current settings`}
+          <input
+            type="text"
+            aria-label="Setup name"
+            value={updateName}
+            onChange={(e) => setUpdateName(e.target.value)}
+            disabled={disabled || updating}
+          />
+          <button type="button" className="btn-primary" onClick={handleUpdate} disabled={disabled || updating}>
+            {updating ? "Updating…" : "Update with current settings"}
           </button>
         </div>
       )}
@@ -67,7 +89,7 @@ export function SetupSaveDialog({ disabled, getInput, activeSetup, onSaved, onUp
           onChange={(e) => setName(e.target.value)}
           disabled={disabled || saving}
         />
-        <button type="button" onClick={handleSave} disabled={disabled || saving}>
+        <button type="button" className="btn-secondary" onClick={handleSave} disabled={disabled || saving}>
           {saving ? "Saving…" : "Save as new setup"}
         </button>
       </div>

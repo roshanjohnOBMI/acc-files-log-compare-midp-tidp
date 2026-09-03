@@ -5,7 +5,6 @@ interface ResultsTableProps {
   results: RowMatchResult[];
   summary: SearchSummary;
   extraFiles: ExtraFile[];
-  sourceFileName?: string;
 }
 
 type DeliverableStatus = FormatMatchStatus | "not_found_in_source" | "skipped";
@@ -97,7 +96,7 @@ function flatten(results: RowMatchResult[], extraFiles: ExtraFile[]): Deliverabl
   return rows;
 }
 
-export function ResultsTable({ results, summary, extraFiles, sourceFileName }: ResultsTableProps) {
+export function ResultsTable({ results, summary, extraFiles }: ResultsTableProps) {
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
 
   const deliverables = useMemo(() => flatten(results, extraFiles), [results, extraFiles]);
@@ -151,13 +150,9 @@ export function ResultsTable({ results, summary, extraFiles, sourceFileName }: R
     return visible;
   }, [filteredDeliverables]);
 
-  const subtitle = sourceFileName ? sourceFileName.replace(/\.[^./\\]+$/, "") : null;
-
   return (
     <div className="results-table">
-      <div className="results-title-bar">
-        TIDP/MIDP Deliverables{subtitle ? `  -  ${subtitle}` : ""}
-      </div>
+      <div className="results-title-bar">TIDP/MIDP Deliverables</div>
       <div className="results-summary">
         <SummaryStat label="Total rows" value={summary.total} />
         <SummaryStat label="Complete" value={summary.complete} className="status-complete" />

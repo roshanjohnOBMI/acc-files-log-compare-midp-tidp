@@ -1,7 +1,7 @@
 {
   "name": "acc-files-log-compare-midp-tidp",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.2.0",
   "engines": {
     "node": ">=20.0.0"
   },

@@ -129,6 +129,10 @@ export function FilesLogSourcePicker({
             Upload an already-exported Files Log workbook straight from your computer - same
             columns as the ACC-picked option, parsed the same way server-side.
           </p>
+          <p className="warning-note">
+            ⚠ A workbook exported earlier can go stale - files may have been added, replaced, or
+            moved in ACC since. If you can, scan live or pick an export you just generated instead.
+          </p>
           <label className="upload-drop">
             <input
               type="file"
