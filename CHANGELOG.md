@@ -7,6 +7,23 @@ for fixes, MAJOR reserved for breaking changes to saved setups or the QA/QC repo
 
 Every production update should add an entry here before/with the deploy that ships it.
 
+## [1.4.0] - 2026-09-20
+
+### Added
+- **Extra Documents section on the QA/QC report's Summary sheet** — Files Log entries that matched
+  no TIDP/MIDP deliverable are now itemized (discipline, file name, format, folder path) instead of
+  appearing only as an "Extra" count in the progress tiles, so they can be reviewed and reconciled
+  (or confirmed as legitimately extra) without switching to the Comparison sheet.
+
+### Fixed
+- **QA/QC report export could receive non-Buffer bytes.** Since the worker-thread pool arrived in
+  1.1.0, the workbook was built on a worker and handed back via `postMessage()`, which delivers a
+  `Buffer` as a plain `Uint8Array`. Express's `res.send()` only treats a true `Buffer` as file
+  bytes, and the ACC upload path expects one too, so the export route now re-wraps the result with
+  `Buffer.from(...)` before using it. Verified against the built server: the worker returns a
+  `Uint8Array`, the re-wrapped value is a `Buffer`, and the resulting workbook opens with the new
+  section present.
+
 ## [1.3.0] - 2026-09-04
 
 ### Added

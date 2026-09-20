@@ -18,7 +18,10 @@ exportRouter.post("/export/report", async (req, res, next) => {
       return;
     }
 
-    const buffer = await runTask("buildQaQcWorkbook", { request: body });
+    // runTask() resolves with whatever the worker thread's postMessage() actually delivers, which
+    // silently turns a real Buffer into a plain Uint8Array in transit - re-wrap it so downstream
+    // code (res.send()'s Buffer.isBuffer() check, the ACC upload) gets a true Buffer as promised.
+    const buffer = Buffer.from(await runTask("buildQaQcWorkbook", { request: body }));
 
     if (body.saveTo) {
       const { projectId, folderId } = body.saveTo;

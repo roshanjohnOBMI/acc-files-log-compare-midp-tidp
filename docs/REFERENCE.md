@@ -1,7 +1,7 @@
 # ACC Files Log vs TIDP/MIDP Checker — Technical Reference
 
 Architecture, workflow, API surface, and deployment record for the OBMI submittal-QA tool built on
-Autodesk Construction Cloud (ACC). Current version **1.3.0** - see
+Autodesk Construction Cloud (ACC). Current version **1.4.0** - see
 [`../CHANGELOG.md`](../CHANGELOG.md) for full version history.
 
 ## Contents
@@ -67,7 +67,10 @@ or Files Log workbook, matching rows, and building the QA/QC export - run on a s
 instead of the main thread, so processing a large workbook doesn't stall other requests or the
 Activity Log panel's own polling. `logEntry()` calls made inside a worker are forwarded to the main
 thread over the worker's message port and re-run there, since each thread would otherwise have its
-own private, never-read copy of the in-memory log.
+own private, never-read copy of the in-memory log. Gotcha for any new worker task that returns
+binary data: `postMessage()` delivers a `Buffer` as a plain `Uint8Array`, so the caller must
+re-wrap it (`Buffer.from(...)`) before handing it to Express's `res.send()` or an upload - as
+`export.routes.ts` does for the QA/QC workbook.
 
 **Client — `client/`.** React 19 + TypeScript + Vite. Has no Excel-parsing dependency of its own -
 the server hands back ready-to-render JSON. All workspace state (hub/project, the loaded workbook,
@@ -270,7 +273,10 @@ Core shapes shared between server and client (`types/domain.ts`, kept in sync on
 
 **Summary sheet** - progress stat tiles (Completion, Total TIDP/MIDP, Total Files Log, Match,
 Missing, Duplicates, Extra), a discipline-wise completion table, grouped Missing and Duplicate
-deliverable lists, the comparison setup used, and a short prose analysis block.
+deliverable lists, an itemized **Extra Documents** list (Files Log entries that matched no
+TIDP/MIDP deliverable - discipline, file name, format, folder path - so they can be reviewed
+without switching to the Comparison sheet), the comparison setup used, and a short prose
+analysis block.
 
 **Comparison Table QA_QC sheet** - one row per TIDP/MIDP row × format, plus one row per unmatched
 Files Log file ("Not found in TIDP/MIDP"). Columns: Deliverable, Format, Status, Discipline, Files

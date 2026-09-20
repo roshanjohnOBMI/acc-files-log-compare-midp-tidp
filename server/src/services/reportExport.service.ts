@@ -25,11 +25,12 @@ const COLORS = {
   darkText: "FF1A1A2E",
 };
 
-// Same tints as STATUS_FILL.not_found_in_log / duplicate_in_log below (Comparison sheet) - kept
-// as their own constants since the Summary sheet's missing/duplicate sections are built before
-// STATUS_FILL is declared.
+// Same tints as STATUS_FILL.not_found_in_log / duplicate_in_log / not_found_in_source below
+// (Comparison sheet) - kept as their own constants since the Summary sheet's missing/duplicate/extra
+// sections are built before STATUS_FILL is declared.
 const MISSING_ROW_FILL = "FFFCE8E6";
 const DUPLICATE_ROW_FILL = "FFFEF3E0";
+const EXTRA_ROW_FILL = "FFF0EDFC";
 
 export interface ReportExportRequest {
   sourceFileName?: string;
@@ -188,6 +189,30 @@ const DUPLICATE_TYPE_LABEL: Record<DuplicateDeliverable["type"], string> = {
   duplicate_in_source: "Duplicate in TIDP/MIDP",
 };
 
+interface ExtraDeliverable {
+  discipline: string;
+  fileName: string;
+  format: string;
+  folderPath: string;
+}
+
+/** Files Log entries with no matching TIDP/MIDP deliverable at all ("not_found_in_source" rows,
+ * one per extra file already - see `flatten`'s extraFiles loop, so no format-grouping is needed
+ * here unlike missing/duplicate). Surfaced as their own itemized list, not just the EXTRA count in
+ * PROGRESS SUMMARY, so these files can be reviewed (and reconciled, or confirmed as legitimately
+ * extra) without switching to the full Comparison sheet. */
+function computeExtraDeliverables(deliverables: DeliverableRow[]): ExtraDeliverable[] {
+  return deliverables
+    .filter((row) => row.status === "not_found_in_source")
+    .map((row) => ({
+      discipline: row.discipline || "(unspecified)",
+      fileName: row.fileName,
+      format: row.format,
+      folderPath: row.folderPath,
+    }))
+    .sort((a, b) => a.discipline.localeCompare(b.discipline) || a.fileName.localeCompare(b.fileName));
+}
+
 /** Same grouping as computeMissingDeliverables, but for duplicates - one row per deliverable
  * (formats collapsed to a comma list) instead of one row per format, split further by duplicate
  * type since "the Files Log has two copies of this file" and "the TIDP/MIDP register lists this
@@ -253,6 +278,7 @@ export async function buildQaQcWorkbook(request: ReportExportRequest): Promise<B
   const disciplineStats = computeDisciplineStats(deliverables);
   const missingDeliverables = computeMissingDeliverables(deliverables);
   const duplicateDeliverables = computeDuplicateDeliverables(deliverables);
+  const extraDeliverables = computeExtraDeliverables(deliverables);
 
   const sourceBaseName = (request.sourceFileName ?? "").replace(/\.[^./\\]+$/, "");
   const projectCode = sourceBaseName.split(/[-_]/)[0] || "Project";
@@ -275,6 +301,7 @@ export async function buildQaQcWorkbook(request: ReportExportRequest): Promise<B
     disciplineStats,
     missingDeliverables,
     duplicateDeliverables,
+    extraDeliverables,
   });
   buildComparisonSheet(workbook, deliverables);
 
@@ -297,6 +324,7 @@ function buildSummarySheet(
     disciplineStats: DisciplineStat[];
     missingDeliverables: MissingDeliverable[];
     duplicateDeliverables: DuplicateDeliverable[];
+    extraDeliverables: ExtraDeliverable[];
   }
 ) {
   const sheet = workbook.addWorksheet("Summary");
@@ -452,6 +480,39 @@ function buildSummarySheet(
       sheet.mergeCells(row, 4, row, statColumnCount);
       dataRow.getCell(4).value = duplicate.formats;
       dataRow.getCell(4).font = { size: 10, color: { argb: "FFF39C12" } };
+      row += 1;
+    }
+  }
+  row += 1;
+
+  row = sectionHeader(sheet, row, statColumnCount, `EXTRA DOCUMENTS (${meta.extraDeliverables.length})`);
+  if (meta.extraDeliverables.length === 0) {
+    sheet.mergeCells(row, 1, row, statColumnCount);
+    sheet.getCell(row, 1).value = "None - every Files Log entry matched a TIDP/MIDP deliverable.";
+    sheet.getCell(row, 1).font = { size: 10, italic: true, color: { argb: "FF6B7280" } };
+    row += 1;
+  } else {
+    const extraHeaderRow = sheet.getRow(row);
+    ["Discipline", "Files Log Entry", "Format", "Folder Path"].forEach((label, idx) => {
+      const cell = extraHeaderRow.getCell(idx + 1);
+      cell.value = label;
+      cell.font = { bold: true, size: 9, color: { argb: "FF6B7280" } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.labelRow } };
+    });
+    sheet.mergeCells(row, 4, row, statColumnCount);
+    row += 1;
+    for (const extra of meta.extraDeliverables) {
+      fillRange(sheet, row, statColumnCount, EXTRA_ROW_FILL);
+      const dataRow = sheet.getRow(row);
+      dataRow.getCell(1).value = extra.discipline;
+      dataRow.getCell(1).font = { size: 10 };
+      dataRow.getCell(2).value = extra.fileName;
+      dataRow.getCell(2).font = { size: 10 };
+      dataRow.getCell(3).value = extra.format;
+      dataRow.getCell(3).font = { size: 10, color: { argb: "FF7B68EE" } };
+      sheet.mergeCells(row, 4, row, statColumnCount);
+      dataRow.getCell(4).value = extra.folderPath;
+      dataRow.getCell(4).font = { size: 10 };
       row += 1;
     }
   }
