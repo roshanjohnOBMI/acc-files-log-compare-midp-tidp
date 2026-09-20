@@ -11,6 +11,11 @@ function isBrokenCircuitError(err: unknown): boolean {
   return err instanceof Error && "isBrokenCircuitError" in err && (err as { isBrokenCircuitError?: unknown }).isBrokenCircuitError === true;
 }
 
+/** Duck-typed for the same reason as above - multer's MulterError carries this code. */
+function isUploadTooLargeError(err: unknown): boolean {
+  return err instanceof Error && (err as { code?: unknown }).code === "LIMIT_FILE_SIZE";
+}
+
 export function errorHandler(
   err: unknown,
   req: Request,
@@ -23,6 +28,13 @@ export function errorHandler(
     logEntry(req.path, "error", message, { method: req.method, cause: "circuit-breaker-open" });
     console.error(`[${req.method} ${req.path}] APS circuit breaker open`, err);
     res.status(503).json({ error: message });
+    return;
+  }
+
+  if (isUploadTooLargeError(err)) {
+    const message = "That file is larger than this app accepts as an upload. Pick it from ACC instead, or trim the workbook.";
+    logEntry(req.path, "error", message, { method: req.method });
+    res.status(413).json({ error: message });
     return;
   }
 

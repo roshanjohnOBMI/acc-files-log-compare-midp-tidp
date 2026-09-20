@@ -395,19 +395,14 @@ label {
   border-bottom: 1px solid var(--border);
 }
 
-/* The one brand mark on the page - top-left corner of every tab, first thing in reading order,
-   so it needs to read as "the app's icon" rather than blend into the row of controls beside it:
-   a filled accent chip (not just an outline) with its own shadow and a permanent soft glow. */
+/* The one brand mark on the page - top-left corner of every tab, first thing in reading order.
+   Just the wordmark itself, no box/border around it. */
 .app-logo-chip {
   display: flex;
   align-items: center;
   flex: none;
   align-self: center;
-  padding: 8px 18px;
-  border: 2px solid var(--accent-blue);
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--accent-blue) 10%, var(--surface-solid));
-  box-shadow: 0 2px 10px color-mix(in srgb, var(--accent-blue) 25%, transparent);
+  padding: 8px 6px;
 }
 
 .app-logo-mark {
@@ -434,7 +429,11 @@ label {
   border-right: 1px solid var(--border);
   margin-bottom: 0;
   min-width: 190px;
-  max-width: 280px;
+  /* No fixed max-width: a <select> sizes itself to its longest option, so letting the label grow
+     with it shows every project name in full whatever the current project list holds. The vw cap
+     is only a safety net so one absurdly long name can't push the user/help cluster off-screen. */
+  flex: none;
+  max-width: 45vw;
 }
 
 .app-topbar-selects select {

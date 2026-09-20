@@ -7,6 +7,33 @@ for fixes, MAJOR reserved for breaking changes to saved setups or the QA/QC repo
 
 Every production update should add an entry here before/with the deploy that ships it.
 
+## [1.5.0] - 2026-09-20
+
+### Added
+- **Streaming TIDP/MIDP parser** (`xlsxStream.service.ts`) — reads a workbook by streaming its XML
+  through a SAX parser and keeping only cell values, instead of building exceljs's full workbook
+  object model. A 50 MB multi-tab, formula-heavy MIDP now costs a few hundred MB and seconds rather
+  than roughly 2 GB and minutes (the old loader was running past the request timeout on files that
+  size). If a file can't be read this way, parsing falls back to the previous exceljs loader.
+  Verified against the old loader on a generated multi-tab workbook: identical cell values,
+  dates, formula results, header-row detection, and tab order.
+- Clear "file too large" message: an upload over the size cap now returns HTTP 413 with "Pick it
+  from ACC instead, or trim the workbook" instead of a generic error.
+
+### Changed
+- TIDP/MIDP upload cap raised from 50 MB to **200 MB** (Windows' "50 MB" is MiB, so a file shown
+  as 50 MB could sit a few hundred KB over an exact cap). The Files Log upload cap is unchanged at
+  50 MB.
+- Parse timeout now scales with file size (60 s + 4 s per MB, capped at 300 s) instead of one flat
+  60 s; the client-side request timeout was raised to 330 s to stay above it.
+- JSON request body limit raised from 10 MB to 100 MB so the compare/export payload for a very
+  large TIDP (one result row per deliverable format) isn't rejected with a 413.
+- `saxes` is now declared as a direct server dependency (it was already installed at the same
+  version through exceljs).
+- Header UI: the OBMI wordmark is shown without a box/border around it, and the hub/project
+  selector sizes to its longest project name (capped at 45% of the viewport width) instead of a
+  fixed 280 px maximum.
+
 ## [1.4.0] - 2026-09-20
 
 ### Added

@@ -1,7 +1,7 @@
 # ACC Files Log vs TIDP/MIDP Checker — Technical Reference
 
 Architecture, workflow, API surface, and deployment record for the OBMI submittal-QA tool built on
-Autodesk Construction Cloud (ACC). Current version **1.4.0** - see
+Autodesk Construction Cloud (ACC). Current version **1.5.0** - see
 [`../CHANGELOG.md`](../CHANGELOG.md) for full version history.
 
 ## Contents
@@ -50,10 +50,11 @@ tool, or ACC's own log exports.
                             ├─ worker_threads pool (server/src/workers/)
                             │    parseTidpWorkbook · parseFilesLogWorkbook
                             │    matchRows · buildQaQcWorkbook
-                            ├─ exceljs         (workbook parsing, inside workers)
+                            ├─ saxes + jszip   (streaming TIDP/MIDP parser, inside workers)
+                            ├─ exceljs         (Files Log parsing, QA/QC export, parse fallback)
                             ├─ lowdb           (server/data/setups.json)
                             ├─ express-session (in-memory store)
-                            └─ multer          (in-memory uploads, 50MB cap)
+                            └─ multer          (in-memory uploads: 200MB TIDP/MIDP, 50MB Files Log)
 ```
 
 A single Node.js process serves both the API and the built React SPA from one Azure Web App
@@ -87,6 +88,7 @@ flash of the wrong theme).
 | server | express                | ^4.21                 | HTTP + routing                     |
 | server | @aps_sdk/*             | auth, data-management, oss | Autodesk Platform Services SDKs |
 | server | exceljs                | ^4.4                  | Workbook read/write                |
+| server | saxes                  | ^5.0.1                | SAX XML parser for the streaming TIDP/MIDP reader |
 | server | express-session        | ^1.18                 | Server-side session, cookie-keyed  |
 | server | lowdb                  | ^7.0                  | JSON-file setup store              |
 | server | multer                 | ^2.2                  | Multipart upload handling          |
@@ -228,8 +230,8 @@ actual auth rejection (not a transient APS outage).
 
 | Method | Path                        | Description                                       |
 | ------ | --------------------------- | -------------------------------------------------- |
-| GET    | `/parse?projectId&itemId`   | Downloads + parses a workbook already in ACC. 60s timeout. |
-| POST   | `/upload`                   | Multipart `file` field, 50MB cap, parsed in memory. |
+| GET    | `/parse?projectId&itemId`   | Downloads + parses a workbook already in ACC. Size-scaled timeout: 60s + 4s/MB, max 300s. |
+| POST   | `/upload`                   | Multipart `file` field, 200MB cap (413 with a plain-language message above it), parsed in memory with the same size-scaled timeout. |
 
 **Files Log — `/api/files-log`**
 
@@ -397,7 +399,8 @@ see [Deployment](#deployment).
 | ---------------------- | ---------------------------------------------------------------------------- |
 | Sessions              | In-memory (`express-session` default store) - fine for a single instance; a restart signs everyone out. |
 | Saved setups          | `server/data/setups.json` - the `server/data/` directory (gitignored, runtime-only) is created at startup if missing, since a fresh deploy checkout won't have it. |
-| Uploads               | 50MB cap, held in memory only for the request - never written to disk.     |
+| Uploads               | 200MB cap for a TIDP/MIDP workbook, 50MB for a Files Log workbook; held in memory only for the request - never written to disk. JSON request bodies (compare/export payloads) are capped at 100MB. |
+| Workbook parsing      | TIDP/MIDP workbooks go through a streaming SAX parser (`xlsxStream.service.ts`) that keeps only cell values - a 50MB multi-tab register costs a few hundred MB instead of ~2GB. Falls back to the full exceljs loader if a file can't be read that way. A tab is read only up to its first 20,000 rows (warning logged). |
 | Blank rows            | Dropped automatically when the TIDP/MIDP workbook is parsed.               |
 | "Only Shared" filter  | Plain case-insensitive substring match on folder path - a file with no folder-path column is left in regardless, with a logged warning. |
 | Revision lookup       | Live-scan files only (need a real version id); capped at 300 matched files per search. |

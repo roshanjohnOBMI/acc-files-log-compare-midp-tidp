@@ -1,6 +1,6 @@
 # ACC Files Log vs TIDP/MIDP Checker
 
-**v1.4.0** - see [`CHANGELOG.md`](CHANGELOG.md) for version history and what changed in each
+**v1.5.0** - see [`CHANGELOG.md`](CHANGELOG.md) for version history and what changed in each
 release.
 
 Checks a TIDP/MIDP Excel schedule against an Autodesk Construction Cloud (ACC) **Files Log**
@@ -144,8 +144,16 @@ npm run build      # typechecks + builds both server (dist/) and client (dist/)
   local/single-instance use. Restarting the server signs everyone out.
 - Saved setups live in `server/data/setups.json` (gitignored) - back it up if you want to keep
   your configurations across machines.
-- Uploads are capped at 50MB and held in memory only for the duration of the request (multer's
-  memory storage) - nothing uploaded is written to disk or persisted server-side.
+- Uploads are held in memory only for the duration of the request (multer's memory storage) -
+  nothing uploaded is written to disk or persisted server-side. The cap is 200MB for a TIDP/MIDP
+  workbook and 50MB for a Files Log workbook; an over-limit file gets a clear "pick it from ACC
+  instead, or trim the workbook" message (HTTP 413) rather than a generic error.
+- TIDP/MIDP workbooks are read with a streaming parser (`xlsxStream.service.ts`) that keeps only
+  cell values, so a 50MB multi-tab, formula-heavy register takes seconds and a few hundred MB
+  instead of minutes and ~2GB. If it can't read a file it falls back to the slower full exceljs
+  loader. Parse time limits scale with file size (60s + 4s per MB, capped at 300s) instead of one
+  flat limit, and a tab is read only up to its first 20,000 rows (a warning is logged when it is
+  cut off).
 - Rows with every cell blank (trailing/spacer rows) are dropped automatically when the TIDP/MIDP
   workbook is parsed - only filled-in rows make it into the filter table.
 - The "only Shared" filter is a plain case-insensitive substring match against each file's folder

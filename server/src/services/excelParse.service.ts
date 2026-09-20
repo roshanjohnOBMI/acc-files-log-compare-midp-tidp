@@ -1,15 +1,13 @@
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
 import { logEntry } from "./errorLog.service.js";
+import { MAX_ROWS_PER_SHEET, findHeaderRowNumber, parseXlsxStreaming } from "./xlsxStream.service.js";
 import type { RawSheetData } from "../types/domain.js";
 
-const MAX_ROWS_PER_SHEET = 20000;
-
-// Worksheet XML sections we don't need (we only read cell values) and that real-world TIDP/MIDP
-// templates lean on heavily - data-validation dropdowns and conditional-formatted status columns
-// especially. Skipping these is what actually made real files slow, far more than blank rows did.
-// "sheetViews" is deliberately NOT in this list - it's where the freeze-pane row lives, which is
-// how we find the real header row (see findHeaderRowNumber).
+// Worksheet XML sections the in-memory fallback loader doesn't need (it only reads cell values) and
+// that real-world TIDP/MIDP templates lean on heavily - data-validation dropdowns and
+// conditional-formatted status columns especially. "sheetViews" is deliberately NOT in this list -
+// it's where the freeze-pane row lives, which is how we find the real header row.
 const IGNORE_NODES = [
   "dataValidations",
   "conditionalFormatting",
@@ -29,11 +27,11 @@ const IGNORE_NODES = [
 ];
 
 /**
- * Parses a workbook server-side with exceljs's standard loader. (An earlier version of this used
- * exceljs's row-streaming reader for extra speed, but that reader throws on multi-sheet workbooks
- * - exactly the shape a MIDP with several TIDP tabs has - so it's not usable here. Parsing still
- * happens in Node rather than being shipped to the browser, which is where most of the original
- * speedup came from; `ignoreNodes` below skips the specific XML sections that made real files slow.)
+ * Parses a workbook server-side into a raw row grid per sheet. Uses the streaming parser
+ * (xlsxStream.service.ts) first: it never builds the workbook object model, so a 50 MB multi-tab,
+ * formula-heavy MIDP costs a few hundred MB and seconds instead of ~2 GB and minutes - the
+ * in-memory loader below was running past the request timeout on files that size. The in-memory
+ * loader stays as a fallback for anything the streaming parser can't read.
  *
  * Returns the raw row grid rather than pre-splitting into headers/data: which row actually holds
  * the headers is a judgment call (see findHeaderRowNumber) that the UI lets the user override, and
@@ -41,6 +39,29 @@ const IGNORE_NODES = [
  * no re-download, no re-parse.
  */
 export async function parseWorkbookBuffer(buffer: Buffer, fileName: string): Promise<RawSheetData[]> {
+  try {
+    return await parseXlsxStreaming(buffer, (sheetName) => warnTruncated(sheetName, fileName));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logEntry(
+      "excel",
+      "warning",
+      `Fast parse of "${fileName}" failed (${message}) - retrying with the slower full loader`
+    );
+    return parseWorkbookInMemory(buffer, fileName);
+  }
+}
+
+function warnTruncated(sheetName: string, fileName: string) {
+  logEntry(
+    "excel",
+    "warning",
+    `"${sheetName}" has more than ${MAX_ROWS_PER_SHEET} rows - only the first ${MAX_ROWS_PER_SHEET} were loaded`,
+    { fileName }
+  );
+}
+
+async function parseWorkbookInMemory(buffer: Buffer, fileName: string): Promise<RawSheetData[]> {
   const cleaned = await stripTableParts(buffer, fileName);
 
   const workbook = new ExcelJS.Workbook();
@@ -65,54 +86,15 @@ export async function parseWorkbookBuffer(buffer: Buffer, fileName: string): Pro
       rows[rowNumber - 1] = values;
     });
 
-    if (truncated) {
-      logEntry(
-        "excel",
-        "warning",
-        `"${worksheet.name}" has more than ${MAX_ROWS_PER_SHEET} rows - only the first ${MAX_ROWS_PER_SHEET} were loaded`,
-        { fileName }
-      );
-    }
+    if (truncated) warnTruncated(worksheet.name, fileName);
 
-    const headerRowNumber = findHeaderRowNumber(worksheet, rows);
+    const frozenView = worksheet.views?.find(
+      (view): view is ExcelJS.WorksheetViewFrozen => view.state === "frozen"
+    );
+    const headerRowNumber = findHeaderRowNumber(frozenView?.ySplit, rows);
 
     return { sheetName: worksheet.name, headerRowNumber, rows };
   });
-}
-
-/**
- * Suggests the header row instead of assuming row 1. Real-world TIDP/MIDP templates often put a
- * title/metadata row (project name, revision) above the actual column headers, and authors almost
- * always freeze panes right below the header row so it stays visible while scrolling - that frozen
- * row count (`ySplit`) is a precise, author-declared signal for exactly which row is the header, so
- * it's tried first. Only when no freeze pane is set do we fall back to a heuristic: scan the loaded
- * rows and pick whichever has the most filled cells (a title row usually has only one or two).
- * Either way this is just the default the UI pre-fills - the user can override it.
- *
- * The fallback used to cap its scan at 10 rows, which missed real-world MIDP tabs that are copies
- * of a frozen-pane tab but lost the freeze (or never had one) - their header row (often 13-14, past
- * several title/notes rows) fell outside that window, so every tab defaulted to row 1 and came out
- * with 0 filled rows. Scanning the full set of loaded rows (already read above, capped at
- * MAX_ROWS_PER_SHEET) instead of re-walking the worksheet with a fixed cutoff avoids that.
- */
-function findHeaderRowNumber(worksheet: ExcelJS.Worksheet, rows: string[][]): number {
-  const frozenView = worksheet.views.find(
-    (view): view is ExcelJS.WorksheetViewFrozen => view.state === "frozen"
-  );
-  if (frozenView?.ySplit && frozenView.ySplit >= 1) {
-    return frozenView.ySplit;
-  }
-
-  let bestRow = 1;
-  let bestCount = -1;
-  for (let rowNumber = 1; rowNumber <= rows.length; rowNumber++) {
-    const count = (rows[rowNumber - 1] ?? []).filter((v) => v && v.trim() !== "").length;
-    if (count > bestCount) {
-      bestCount = count;
-      bestRow = rowNumber;
-    }
-  }
-  return bestRow;
 }
 
 const TABLE_PART_PATTERN = /^xl\/tables\/table\d+\.xml$/i;

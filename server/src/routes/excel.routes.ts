@@ -6,20 +6,34 @@ import { runTask } from "../workers/workerPool.js";
 
 export const excelRouter = Router();
 
-const REQUEST_TIMEOUT_MS = 60_000;
-const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+// Comfortably above the 50 MB a big MIDP reaches (and Windows' "50 MB" is MiB, so a file shown as
+// 50 MB can be a few hundred KB over an exact 50 * 1024 * 1024 cap).
+const MAX_UPLOAD_BYTES = 200 * 1024 * 1024;
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD_BYTES } });
 
+// Parse time scales with file size (a 50 MB workbook legitimately takes far longer than a 1 MB
+// one), so a flat limit is either too tight for big files or too slack for small ones.
+// client/src/api/excel.ts's PARSE_TIMEOUT_MS must stay above MAX_PARSE_TIMEOUT_MS.
+const BASE_PARSE_TIMEOUT_MS = 60_000;
+const PARSE_TIMEOUT_MS_PER_MB = 4_000;
+const MAX_PARSE_TIMEOUT_MS = 300_000;
+
+function parseTimeoutMs(byteLength: number): number {
+  return Math.min(MAX_PARSE_TIMEOUT_MS, BASE_PARSE_TIMEOUT_MS + (byteLength / 1024 / 1024) * PARSE_TIMEOUT_MS_PER_MB);
+}
+
 async function parseWithTimeout(buffer: Buffer, fileName: string) {
+  const timeoutMs = parseTimeoutMs(buffer.byteLength);
+  let timer: NodeJS.Timeout | undefined;
   const timeout = new Promise<never>((_, reject) => {
-    setTimeout(
+    timer = setTimeout(
       () =>
         reject(
           new Error(
-            "Loading this workbook is taking too long - it may have excessive formatting or blank rows. Try again, or trim the file."
+            `Loading this workbook took longer than ${Math.round(timeoutMs / 1000)}s and was stopped - it may have excessive formatting or a huge used range. Try again, or trim the file.`
           )
         ),
-      REQUEST_TIMEOUT_MS
+      timeoutMs
     );
   });
 
@@ -39,7 +53,7 @@ async function parseWithTimeout(buffer: Buffer, fileName: string) {
       return { fileName, sheets: parsed };
     })(),
     timeout,
-  ]);
+  ]).finally(() => clearTimeout(timer));
 }
 
 excelRouter.get("/excel/parse", async (req, res, next) => {

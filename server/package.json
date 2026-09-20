@@ -1,7 +1,7 @@
 {
   "name": "server",
   "private": true,
-  "version": "1.4.0",
+  "version": "1.5.0",
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -19,6 +19,7 @@
     "jszip": "^3.10.1",
     "lowdb": "^7.0.1",
     "multer": "^2.2.0",
+    "saxes": "^5.0.1",
     "uuid": "^11.0.5"
   },
   "devDependencies": {

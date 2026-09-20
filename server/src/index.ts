@@ -28,7 +28,9 @@ if (config.isProduction) {
 }
 
 app.use(cors({ origin: config.clientUrl, credentials: true }));
-app.use(express.json({ limit: "10mb" }));
+// Big enough for a large TIDP's compare/export payloads (one result row per deliverable format,
+// tens of thousands of rows) - the 10 MB default would 413 the export of a 50 MB workbook's results.
+app.use(express.json({ limit: "100mb" }));
 app.use(
   session({
     secret: config.sessionSecret,
